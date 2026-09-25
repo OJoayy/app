@@ -10,8 +10,9 @@ import * as screens from './screens.js';
 import * as W from './widgets.js';
 import * as FX from './fx.js';
 import * as F from './finance.js';
+import * as Wi from './wishes.js';
 
-const APP_VERSION = '0.7';
+const APP_VERSION = '0.8';
 const PASS_EVERY_MS = 7 * 86400000; // la phrase est redemandée tous les 7 jours
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
@@ -98,6 +99,10 @@ window.addEventListener('popstate', () => {
     case 's-tx':
     case 's-account':
       screens.back().then((left) => { if (!left) syncHistory(currentScreen()); });
+      break;
+    case 's-wishes':
+    case 's-wish-form':
+      Wi.back(cur).then((left) => { if (!left) syncHistory(currentScreen()); });
       break;
     case 's-debt':
     case 's-asset':
@@ -223,6 +228,8 @@ function saveData({ touch = true } = {}) {
 function openSession(key, meta, data, startEpoch) {
   if (document.hidden || startEpoch !== epoch) { goLock(); return false; }
   session = { key, meta, data };
+  sessionSeq += 1;
+  shareReady = null;
   lastActivity = Date.now();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   screens.openTab('s-home');
@@ -247,6 +254,8 @@ function lock() {
   hideSecrets();
   for (const id of ['export-msg', 'cp-msg', 'import-msg', 'home-msg', 'pin-msg']) setMsg(id, '');
   screens.clearAll();
+  Wi.clearWishes();
+  shareReady = null;
   $('tabbar').hidden = true;
   $('fab').hidden = true;
   goLock();
@@ -802,21 +811,53 @@ async function onExportDownload() {
   }
 }
 
+// Envoi vers Drive (ou autre) par le menu Partager d'Android.
+// Android n'ouvre ce menu que juste après un toucher. Préparer le fichier
+// (chiffrement) prend un instant : si le toucher a "expiré", le fichier reste
+// prêt et le toucher suivant l'envoie tout de suite, sans rien recalculer.
+let shareReady = null; // { file, at, seq, ver } — fichier chiffré prêt à partir (2 min max)
+let sessionSeq = 0; // change à chaque ouverture du coffre (on ne garde jamais la session elle-même)
+let sharing = false;
+
 async function onExportShare() {
-  if (isBusy() || !session) return;
-  const target = await shareableBackup();
-  if (!target) return;
-  busy(true);
+  if (isBusy() || sharing || !session) return;
+  const s = session;
+  const seq = sessionSeq;
+  if (!shareReady || Date.now() - shareReady.at > 120000 || shareReady.seq !== seq || shareReady.ver !== s.data.updatedAt) {
+    shareReady = null;
+    const target = await shareableBackup();
+    if (!target) { setMsg('export-msg', t('shareUnsupported')); return; }
+    busy(true);
+    try {
+      const file = await buildBackup(target.name, target.type);
+      shareReady = { file, at: Date.now(), seq, ver: s.data.updatedAt };
+    } catch {
+      setMsg('export-msg', t('errGeneric'));
+      return;
+    } finally {
+      busy(false);
+    }
+  }
+  const { file } = shareReady;
+  suppressLockUntil = Date.now() + 120000;
+  sharing = true;
+  let sent = false;
   try {
-    const file = await buildBackup(target.name, target.type);
-    suppressLockUntil = Date.now() + 120000;
-    await navigator.share({ files: [file], title: file.name });
-    await markBackup(t('exportShared', { name: file.name }));
+    await navigator.share({ files: [file] });
+    sent = true;
+    shareReady = null;
   } catch (e) {
-    if (!(e && e.name === 'AbortError')) setMsg('export-msg', t('errGeneric'));
+    const name = e && e.name ? e.name : 'Error';
+    if (name === 'AbortError') setMsg('export-msg', t('shareCancelled'));
+    else if (name === 'NotAllowedError') setMsg('export-msg', t('shareTapAgain'));
+    else { shareReady = null; setMsg('export-msg', t('shareFailed', { e: name })); }
   } finally {
+    sharing = false;
     suppressLockUntil = 0;
-    busy(false);
+  }
+  // Le fichier est parti : noter la date de sauvegarde (une erreur ici n'annule pas l'envoi).
+  if (sent && session === s) {
+    try { await markBackup(t('exportShared', { name: file.name })); } catch { setMsg('export-msg', t('exportShared', { name: file.name })); }
   }
 }
 
@@ -974,7 +1015,7 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.7//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.8//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,
@@ -1103,7 +1144,9 @@ async function init() {
   W.enhanceSecrets();
   renderLangChips();
   wire();
-  screens.initScreens({
+  const ctx = {
+    goHome: () => screens.openTab('s-home'),
+    openTab: (id) => screens.openTab(id),
     data: () => (session ? session.data : null),
     save: async () => {
       if (!session) return false;
@@ -1127,11 +1170,71 @@ async function init() {
     pushBackGuard: () => { if (!backGuard) { history.pushState({ sika: 1 }, ''); backGuard = true; } },
     syncBack: () => syncHistory(currentScreen()),
     toggleDiscreet: async () => { prefs.discreet = !prefs.discreet; applyDiscreet(); await savePrefs(); },
-  });
+  };
+  screens.initScreens(ctx);
+  Wi.initWishes(ctx);
+  $('btn-open-wishes').onclick = () => Wi.openWishes('s-settings');
+  setupWishesGesture();
+  setupSwipe();
   $('btn-settings').onclick = () => screens.openTab('s-settings');
   applyDiscreet();
   registerServiceWorker();
   await goLock();
+}
+
+// ---------- Mes envies : appui long sur le nom SIKA ----------
+
+function setupWishesGesture() {
+  // On ouvre au moment où le doigt se lève (après 600 ms d'appui) : c'est un vrai
+  // geste de l'utilisateur, donc le bouton retour d'Android reste fiable ensuite.
+  const brand = document.querySelector('#s-home .brand');
+  let press = null;
+  brand.addEventListener('pointerdown', (e) => { press = session ? { x: e.clientX, y: e.clientY, t: Date.now() } : null; });
+  brand.addEventListener('pointermove', (e) => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) press = null;
+  });
+  for (const ev of ['pointercancel', 'pointerleave']) brand.addEventListener(ev, () => { press = null; });
+  brand.addEventListener('pointerup', () => {
+    const p = press;
+    press = null;
+    if (!p || Date.now() - p.t < 600) return;
+    if (session && !$('s-home').hidden && !isBusy() && $('modal').hidden && $('fab-menu').hidden) Wi.openWishes('s-home');
+  });
+  brand.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+// ---------- Glisser à gauche / à droite pour changer d'onglet ----------
+// Seulement si le geste part du milieu de l'écran (les bords servent au
+// geste "retour" d'Android), et jamais depuis un champ de saisie.
+const SWIPE_ORDER = ['s-home', 's-accounts', 's-debts', 's-assets', 's-history'];
+
+function setupSwipe() {
+  let s0 = null;
+  document.addEventListener('touchstart', (e) => {
+    s0 = null;
+    if (!session || e.touches.length !== 1) return;
+    const cur = currentScreen();
+    if (!SWIPE_ORDER.includes(cur) || !$('fab-menu').hidden || !$('modal').hidden || isBusy()) return;
+    const tch = e.touches[0];
+    const w = window.innerWidth;
+    if (tch.clientX < w * 0.15 || tch.clientX > w * 0.85) return;
+    if (e.target.closest('input, select, textarea, .chips, .pin-slots, .spark')) return;
+    s0 = { x: tch.clientX, y: tch.clientY, t: Date.now(), screen: cur };
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!s0) return;
+    const tch = e.changedTouches[0];
+    const dx = tch.clientX - s0.x;
+    const dy = tch.clientY - s0.y;
+    const from = s0;
+    s0 = null;
+    if (Date.now() - from.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+    if (!session || currentScreen() !== from.screen) return;
+    const i = SWIPE_ORDER.indexOf(from.screen) + (dx < 0 ? 1 : -1);
+    if (i < 0 || i >= SWIPE_ORDER.length) return;
+    screens.openTab(SWIPE_ORDER[i]);
+  }, { passive: true });
+  document.addEventListener('touchcancel', () => { s0 = null; }, { passive: true });
 }
 
 init();

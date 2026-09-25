@@ -4,6 +4,19 @@
 const T = {
   fr: {
     appName: 'SIKA',
+    // --- v0.8 : envies, partage Drive ---
+    wishesTitle: 'Mes envies', wishesTotalTitle: 'Coût estimé de ce qui reste', addWish: 'Ajouter une envie', editWish: 'Modifier l’envie',
+    wishNameLabel: 'Quoi ?', wishNoteLabel: 'Pourquoi ? (une phrase)', wishAmountLabel: 'Prix estimé (facultatif)', currencyLabel: 'Devise',
+    deleteWish: 'Supprimer l’envie', deleteWishConfirm: 'Supprimer « {name} » ?', errWishName: 'Écris ce que tu aimerais avoir ou faire.',
+    errTooManyWishes: 'Maximum 300 envies.', noWishes: 'Rien pour l’instant. Ajoute ta première envie.',
+    wishesCount: '{n} à faire · {d} réalisée(s)', wishesCountFx: '{n} à faire · {d} réalisée(s) · certains prix en £ attendent le taux',
+    showDone: 'Voir les envies réalisées ({n})', hideDone: 'Cacher les envies réalisées ({n})',
+    wishDo: 'Cocher « {name} » : réalisé', wishUndo: 'Décocher « {name} »', wishDoneOn: 'Réalisé le {date}', noPrice: 'prix ?',
+    exportShare: 'Envoyer vers Google Drive',
+    driveHelp: 'Dans le menu qui s’ouvre, choisis « Drive » (ou « Enregistrer dans Drive »), puis touche Enregistrer.',
+    shareUnsupported: 'Ce téléphone ne permet pas l’envoi direct. Télécharge la sauvegarde, puis ajoute-la depuis l’app Drive.',
+    shareCancelled: 'Envoi annulé.', shareTapAgain: 'Fichier prêt : touche encore « Envoyer vers Google Drive ».',
+    shareFailed: 'L’envoi a échoué ({e}). Télécharge la sauvegarde, puis ajoute-la depuis l’app Drive.',
     // --- v0.6 : dettes et investissements ---
     tabDebts: 'Dettes', tabAssets: 'Investir',
     new_repay: 'Remboursement', edit_repay: 'Modifier le remboursement',
@@ -182,7 +195,6 @@ const T = {
     lastBackup: 'Dernière sauvegarde : {date}',
     lastBackupNever: 'Dernière sauvegarde : jamais',
     exportDownload: 'Télécharger la sauvegarde',
-    exportShare: 'Partager la sauvegarde (Drive…)',
     exportDownloaded: 'Sauvegarde créée : {name}. Vérifie qu’elle est bien dans Téléchargements.',
     exportShared: 'Sauvegarde partagée : {name}. Vérifie qu’elle est bien arrivée.',
     importBtn: 'Importer une sauvegarde',
@@ -236,6 +248,19 @@ const T = {
 
   en: {
     appName: 'SIKA',
+    // --- v0.8: wishes, Drive sharing ---
+    wishesTitle: 'My wishes', wishesTotalTitle: 'Estimated cost of what is left', addWish: 'Add a wish', editWish: 'Edit wish',
+    wishNameLabel: 'What?', wishNoteLabel: 'Why? (one sentence)', wishAmountLabel: 'Estimated price (optional)', currencyLabel: 'Currency',
+    deleteWish: 'Delete wish', deleteWishConfirm: 'Delete “{name}”?', errWishName: 'Type what you would like to have or do.',
+    errTooManyWishes: 'Maximum 300 wishes.', noWishes: 'Nothing yet. Add your first wish.',
+    wishesCount: '{n} to do · {d} done', wishesCountFx: '{n} to do · {d} done · some £ prices wait for the rate',
+    showDone: 'Show done wishes ({n})', hideDone: 'Hide done wishes ({n})',
+    wishDo: 'Tick “{name}”: done', wishUndo: 'Untick “{name}”', wishDoneOn: 'Done on {date}', noPrice: 'price?',
+    exportShare: 'Send to Google Drive',
+    driveHelp: 'In the menu that opens, pick “Drive” (or “Save to Drive”), then tap Save.',
+    shareUnsupported: 'This phone cannot send directly. Download the backup, then add it from the Drive app.',
+    shareCancelled: 'Sending cancelled.', shareTapAgain: 'File ready: tap “Send to Google Drive” again.',
+    shareFailed: 'Sending failed ({e}). Download the backup, then add it from the Drive app.',
     // --- v0.6: debts and investments ---
     tabDebts: 'Debts', tabAssets: 'Invest',
     new_repay: 'Repayment', edit_repay: 'Edit repayment',
@@ -412,7 +437,6 @@ const T = {
     lastBackup: 'Last backup: {date}',
     lastBackupNever: 'Last backup: never',
     exportDownload: 'Download the backup',
-    exportShare: 'Share the backup (Drive…)',
     exportDownloaded: 'Backup created: {name}. Check that it is in Downloads.',
     exportShared: 'Backup shared: {name}. Check that it arrived.',
     importBtn: 'Import a backup',

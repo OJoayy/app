@@ -4,7 +4,7 @@
 
 import { cleanFx } from './fx.js';
 
-export const DATA_SCHEMA = 3; // v3 : dettes et investissements
+export const DATA_SCHEMA = 4; // v3 : dettes et investissements ; v4 : liste d'envies
 // Garde-fous : 100 milliards FCFA par montant, 50 000 opérations.
 // Ainsi, même le plus grand total reste un nombre exact en JavaScript.
 export const MAX_AMOUNT = 100_000_000_000;
@@ -38,7 +38,8 @@ export const INCOME_SOURCES = ['client', 'asset', 'other'];
 export const ASSET_CATEGORIES = ['land', 'stocks', 'crypto', 'savings'];
 export const DEBT_METHODS = ['avalanche', 'snowball'];
 
-export const LIMITS = { name: 40, desc: 140, reason: 280, accounts: 50, tx: 50_000, debts: 50, assets: 100, rows: 600, values: 2000 };
+export const LIMITS = { name: 40, desc: 140, reason: 280, accounts: 50, tx: 50_000, debts: 50, assets: 100, rows: 600, values: 2000, wishes: 300, note: 280 };
+export const WISH_CURRENCIES = ['XOF', 'EUR', 'GBP'];
 
 // ---------- Outils ----------
 
@@ -269,12 +270,32 @@ export function cleanAsset(a) {
   return { id: a.id, name: a.name.trim(), category: a.category, initialCost: a.initialCost, values, closed: a.closed === true };
 }
 
+// Une envie : quelque chose que j'aimerais acheter ou faire, avec un prix estimé.
+// amount : null (pas d'idée du prix) ou entier dans sa devise (FCFA, € ou £).
+export function cleanWish(w) {
+  if (!isObj(w) || !isId(w.id)) fail('wish.id');
+  if (!isStr(w.name, LIMITS.name) || !w.name.trim()) fail('wish.name');
+  const note = w.note === undefined ? '' : w.note;
+  if (!isStr(note, LIMITS.note)) fail('wish.note');
+  if (w.amount !== null && w.amount !== undefined && !isAmount(w.amount)) fail('wish.amount');
+  if (!WISH_CURRENCIES.includes(w.currency)) fail('wish.currency');
+  // En € ou £, plafond plus bas : converti en FCFA, le total reste exact.
+  if (w.currency !== 'XOF' && w.amount && w.amount > MAX_AMOUNT / 1000) fail('wish.amount');
+  if (!isDate(w.createdAt)) fail('wish.createdAt');
+  if (w.doneAt !== null && w.doneAt !== undefined && !isDate(w.doneAt)) fail('wish.doneAt');
+  const done = w.done === true;
+  return {
+    id: w.id, name: w.name.trim(), note: note.trim(), amount: w.amount ?? null, currency: w.currency,
+    done, createdAt: new Date(w.createdAt).toISOString(), doneAt: done && w.doneAt ? new Date(w.doneAt).toISOString() : null,
+  };
+}
+
 // Données vides d'un nouveau coffre.
 export function newData() {
   const now = new Date().toISOString();
   return {
     schema: DATA_SCHEMA, createdAt: now, updatedAt: now, lastBackupAt: null, fx: null,
-    debtMethod: 'avalanche', accounts: [], debts: [], assets: [], tx: [],
+    debtMethod: 'avalanche', accounts: [], debts: [], assets: [], tx: [], wishes: [],
   };
 }
 
@@ -296,11 +317,14 @@ export function migrateAndValidate(d) {
   }
   // v2 -> v3 : on ajoute les dettes et les actifs (vides).
   if (d.schema === 2) d = { ...d, schema: 3, debts: [], assets: [], debtMethod: 'avalanche' };
+  // v3 -> v4 : on ajoute la liste d'envies (vide).
+  if (d.schema === 3) d = { ...d, schema: 4, wishes: [] };
   if (d.schema !== DATA_SCHEMA) fail('schema');
   if (!Array.isArray(d.debts) || d.debts.length > LIMITS.debts) fail('debts');
   if (!Array.isArray(d.assets) || d.assets.length > LIMITS.assets) fail('assets');
   if (!Array.isArray(d.accounts) || d.accounts.length > LIMITS.accounts) fail('accounts');
   if (!Array.isArray(d.tx) || d.tx.length > LIMITS.tx) fail('tx');
+  if (!Array.isArray(d.wishes) || d.wishes.length > LIMITS.wishes) fail('wishes');
   if (d.lastBackupAt !== null && d.lastBackupAt !== undefined && !isDate(d.lastBackupAt)) fail('lastBackupAt');
 
   const accounts = d.accounts.map(cleanAccount);
@@ -312,6 +336,8 @@ export function migrateAndValidate(d) {
   if (refs.assets.size !== assets.length) fail('asset.duplicate');
   const tx = d.tx.map((t) => cleanTx(t, refs));
   if (new Set(tx.map((t) => t.id)).size !== tx.length) fail('tx.duplicate');
+  const wishes = d.wishes.map(cleanWish);
+  if (new Set(wishes.map((w) => w.id)).size !== wishes.length) fail('wish.duplicate');
 
   return {
     schema: DATA_SCHEMA,
@@ -324,6 +350,7 @@ export function migrateAndValidate(d) {
     debts,
     assets,
     tx,
+    wishes,
   };
 }
 

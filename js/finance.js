@@ -7,7 +7,7 @@ import * as D from './debts.js';
 import * as A from './assets.js';
 import * as FX from './fx.js';
 import { t, getLang } from './i18n.js';
-import { el, money, fmtDay, fmtYmd, todayStr, poolName, accountName, avatar, renderChips, sparkline } from './ui.js';
+import { el, money, fmtDay, fmtYmd, todayStr, poolName, accountName, avatar, renderChips, sparkline, liveAmount } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,7 +48,7 @@ function isoFromDay(ymd) {
 
 function parseDecimal(v) {
   const s = String(v).trim().replace(/\s/g, '').replace(',', '.').replace('%', '');
-  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null; // 2 chiffres après la virgule au plus
   return Number(s);
 }
 
@@ -276,7 +276,7 @@ function onDebtIcs() {
   if (!d) return;
   const st = D.debtStatus(d, data);
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.7//FR', 'CALSCALE:GREGORIAN'];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.8//FR', 'CALSCALE:GREGORIAN'];
   for (const r of st.schedule) {
     if (r.paid || r.date < D.todayYmd()) continue;
     const day = r.date.replace(/-/g, '');
@@ -316,6 +316,7 @@ function addRowEl(date = '', amount = '') {
   const ai = el('input');
   ai.type = 'text';
   ai.inputMode = 'numeric';
+  liveAmount(ai);
   ai.placeholder = '0';
   ai.value = amount;
   ai.setAttribute('aria-label', t('amountLabel'));
@@ -541,7 +542,7 @@ function renderAsset() {
   const cur = [{ id: 'XOF', label: 'FCFA' }, { id: 'EUR', label: '€' }];
   if (fx) cur.push({ id: 'GBP', label: '£' });
   if (!cur.some((c) => c.id === valueCurrency)) valueCurrency = 'XOF';
-  const renderCur = () => renderChips($('asset-currencies'), cur, valueCurrency, (id) => { valueCurrency = id; renderCur(); });
+  const renderCur = () => renderChips($('asset-currencies'), cur, valueCurrency, (id) => { valueCurrency = id; renderCur(); $('asset-new-value').value = ''; });
   renderCur();
   $('btn-asset-sell').hidden = s.value <= 0 && s.cost <= 0;
 
@@ -786,6 +787,9 @@ export function initFinance(context, screensApi) {
   // Seulement la carte Stratégie : reconstruire la liste avalerait le toucher en cours.
   $('strategy-extra').addEventListener('change', () => { strategyExtra = L.parseAmount($('strategy-extra').value) || 0; renderStrategy(activeDebts()); });
 
+  // Espaces des milliers pendant la frappe. La nouvelle valeur accepte des centimes en € et £.
+  for (const id of ['debt-principal', 'strategy-extra', 'asset-buy-amount', 'asset-cost', 'asset-value-now']) liveAmount($(id));
+  liveAmount($('asset-new-value'), { decimals: () => valueCurrency !== 'XOF' });
   $('btn-add-asset').onclick = () => openAssetForm();
   $('btn-asset-value').onclick = onAssetValue;
   $('btn-asset-buy').onclick = () => { api.setReturn('s-asset'); api.openTxForm('buy', null, { asset: currentAssetId }); api.setReturn('s-asset'); };

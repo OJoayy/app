@@ -447,9 +447,46 @@
     <button type="button" id="btn-asset-cancel" class="link" data-i18n="cancel"></button>
   </section>
 
+  <!-- Mes envies (écran caché : appui long sur SIKA, ou Réglages) -->
+  <section id="s-wishes" class="screen" hidden>
+    <h1 data-i18n="wishesTitle"></h1>
+    <div class="card total">
+      <p class="muted" data-i18n="wishesTotalTitle"></p>
+      <p id="wishes-total" class="big"></p>
+      <p id="wishes-count" class="muted"></p>
+      <button type="button" id="btn-add-wish" class="secondary" data-i18n="addWish"></button>
+    </div>
+    <div id="wishes-list" class="card list"></div>
+    <div id="wishes-done-wrap" class="card list archived" hidden>
+      <button type="button" id="btn-wishes-done" class="link"></button>
+      <div id="wishes-done" hidden></div>
+    </div>
+    <button type="button" id="btn-wishes-back" class="link" data-i18n="back"></button>
+  </section>
+
+  <!-- Une envie : ajouter / modifier -->
+  <section id="s-wish-form" class="screen" hidden>
+    <h1 id="wish-form-title"></h1>
+    <label><span data-i18n="wishNameLabel"></span>
+      <input id="wish-name" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <label><span data-i18n="wishNoteLabel"></span>
+      <textarea id="wish-note" rows="3" maxlength="280"></textarea>
+    </label>
+    <label><span data-i18n="wishAmountLabel"></span>
+      <input id="wish-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+    </label>
+    <div id="wish-currencies" class="row chips" role="group" data-i18n-aria="currencyLabel"></div>
+    <p id="wish-err" class="error" role="alert"></p>
+    <button type="button" id="btn-wish-save" class="primary" data-i18n="save"></button>
+    <button type="button" id="btn-wish-delete" class="danger" data-i18n="deleteWish" hidden></button>
+    <button type="button" id="btn-wish-cancel" class="link" data-i18n="cancel"></button>
+  </section>
+
   <!-- Réglages -->
   <section id="s-settings" class="screen tabbed" hidden>
     <h1 data-i18n="settings"></h1>
+
 
     <div class="card">
       <h2 data-i18n="backupTitle"></h2>
@@ -459,6 +496,7 @@
       <button type="button" id="btn-export-share" class="secondary" data-i18n="exportShare" hidden></button>
       <button type="button" id="btn-go-import" class="secondary" data-i18n="importBtn"></button>
       <p id="export-msg" class="ok" role="status"></p>
+      <p id="export-help" class="muted small-note" data-i18n="driveHelp"></p>
     </div>
 
     <div class="card">
@@ -542,6 +580,7 @@
       <p class="muted" data-i18n="wipeHelp"></p>
       <button type="button" id="btn-wipe" class="danger" data-i18n="wipeBtn"></button>
     </div>
+    <button type="button" id="btn-open-wishes" class="link" data-i18n="wishesTitle"></button>
   </section>
 
   <!-- Importer une sauvegarde -->
@@ -589,14 +628,10 @@
   <!-- Bouton + flottant et son menu -->
   <div id="fab-backdrop" class="fab-backdrop" hidden></div>
   <div id="fab-menu" class="fab-menu" hidden>
-    <!-- De haut en bas : les moins utilisés en haut, Dépense et Revenu sur la même ligne en bas. -->
-    <button type="button" id="fab-buy" class="primary" data-i18n="newBuy"></button>
-    <button type="button" id="fab-repay" class="primary" data-i18n="newRepay"></button>
-    <button type="button" id="fab-transfer" class="primary" data-i18n="newTransfer"></button>
-    <div class="fab-row">
-      <button type="button" id="fab-expense" class="primary" data-i18n="newExpense"></button>
-      <button type="button" id="fab-income" class="primary" data-i18n="newIncome"></button>
-    </div>
+    <!-- Transfert au-dessus de Revenu ; en bas, Dépense et Revenu se partagent la ligne. -->
+    <button type="button" id="fab-transfer" class="fab-transfer" data-i18n="newTransfer"></button>
+    <button type="button" id="fab-expense" class="fab-expense" data-i18n="newExpense"></button>
+    <button type="button" id="fab-income" class="fab-income" data-i18n="newIncome"></button>
   </div>
   <button type="button" id="fab" class="fab" data-i18n-aria="addTx" aria-expanded="false" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>

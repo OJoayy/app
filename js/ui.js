@@ -106,3 +106,35 @@ export function sparkline(points, width = 300, height = 60) {
   svg.append(last);
   return svg;
 }
+
+// Montant tapé : espaces ajoutés tout seuls pendant la frappe ("1250000" -> "1 250 000").
+// decimals: true accepte aussi une virgule et 2 chiffres après (pour € et £).
+// Le curseur reste après le même chiffre, même quand des espaces sont ajoutés.
+// Règle : on ne supprime JAMAIS un caractère en silence. Dès que le texte n'est
+// pas un nombre simple (lettre, signe moins, point en FCFA, plus de 12 chiffres,
+// plusieurs virgules, plus de 2 décimales…), il est laissé tel quel et la
+// vérification à l'enregistrement le refuse avec un message.
+export function groupDigits(raw, decimals = false) {
+  const text = String(raw);
+  const s = text.replace(/\s/g, '');
+  const m = decimals ? s.match(/^(\d{0,12})(?:[.,](\d{0,2}))?$/) : s.match(/^(\d{0,12})$/);
+  if (!m) return text;
+  const int = m[1].replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return m[2] === undefined ? int : `${int || '0'},${m[2]}`;
+}
+
+export function liveAmount(input, opts = {}) {
+  const decimals = () => (typeof opts.decimals === 'function' ? opts.decimals() : Boolean(opts.decimals));
+  input.addEventListener('input', () => {
+    const before = input.value;
+    const caret = input.selectionStart ?? before.length;
+    const keep = before.slice(0, caret).replace(/[^\d.,]/g, '').length; // chiffres (et virgule) avant le curseur
+    const after = groupDigits(before, decimals());
+    if (after === before) return;
+    input.value = after;
+    let pos = 0;
+    let seen = 0;
+    while (pos < after.length && seen < keep) { if (/[\d,]/.test(after[pos])) seen += 1; pos += 1; }
+    try { input.setSelectionRange(pos, pos); } catch { /* champ sans curseur */ }
+  });
+}

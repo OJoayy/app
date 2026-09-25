@@ -8,7 +8,7 @@ import { t, getLang } from './i18n.js';
 import * as FX from './fx.js';
 import * as W from './widgets.js';
 import * as F from './finance.js';
-import { el, money, fmtDay, todayStr, poolName, moodOf, accountName, avatar, imageToIcon, renderChips } from './ui.js';
+import { el, money, fmtDay, todayStr, poolName, moodOf, accountName, avatar, imageToIcon, renderChips, liveAmount } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -517,7 +517,6 @@ export function toggleFab(open) {
     // Sans compte, le + ouvre directement la création d'un compte.
     if (!active) { toggleFab(false); openAccountForm(); return; }
     $('fab-transfer').hidden = active < 2;
-    $('fab-repay').hidden = !data.debts.some((d) => !F.isDebtDone(d, data));
   }
   $('fab-menu').hidden = !want;
   $('fab-backdrop').hidden = !want;
@@ -605,16 +604,16 @@ export function initScreens(context) {
   $('fab-income').onclick = () => { toggleFab(false); openTxForm('income'); };
   $('fab-expense').onclick = () => { toggleFab(false); openTxForm('expense'); };
   $('fab-transfer').onclick = () => { toggleFab(false); openTxForm('transfer'); };
-  $('fab-repay').onclick = () => { toggleFab(false); F.openRepay(); };
-  $('fab-buy').onclick = () => { toggleFab(false); F.openBuy(); };
   $('btn-discreet').onclick = () => ctx.toggleDiscreet();
   $('btn-debts-discreet').onclick = () => ctx.toggleDiscreet();
   $('btn-home-add-account').onclick = () => openAccountForm();
   $('btn-add-account').onclick = () => openAccountForm();
 
+  liveAmount($('tx-amount')); // d'abord les espaces, puis les vérifications
   for (const id of ['tx-amount', 'tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('input', updateTxChecks);
   for (const id of ['tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('change', updateTxChecks);
   F.initFinance(ctx, { openTxForm, openTab, currentTab: () => currentTab(), setReturn: (id) => { returnTo = id; } });
+  liveAmount($('acc-start'));
   $('tx-amount').addEventListener('blur', () => prettyAmount($('tx-amount')));
   $('acc-start').addEventListener('blur', () => prettyAmount($('acc-start')));
   $('btn-tx-save').onclick = onTxSave;
