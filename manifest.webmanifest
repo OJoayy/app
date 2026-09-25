@@ -1,6 +1,6 @@
 {
-  "name": "Finances Perso",
-  "short_name": "Finances",
+  "name": "Sika",
+  "short_name": "Sika",
   "description": "Gestion d'argent personnelle, chiffrée, hors ligne.",
   "lang": "fr",
   "start_url": "./",

@@ -1,4 +1,6 @@
-# Finances Perso — v0.1 (étape 1 : le coffre-fort)
+# Sika — v0.2 (étape 1 : le coffre-fort)
+
+v0.2 = v0.1 + nouveau nom « Sika ». Rien d'autre ne change.
 
 Cette version ne gère pas encore l'argent. Elle construit et teste la base : le chiffrement, la phrase secrète, la clé de secours, le verrouillage et la sauvegarde.
 
@@ -25,7 +27,7 @@ Cette version ne gère pas encore l'argent. Elle construit et teste la base : le
 2. Clique **+** (en haut à droite) → **New repository**.
 3. Nom du dépôt : `app`. Visibilité : **Public**. Coche **Add a README file**. Clique **Create repository**.
 4. Dans le dépôt : **Add file** → **Upload files**.
-5. Décompresse le fichier `finances-perso-v0.1.zip` sur l'ordinateur. Ouvre le dossier `finances-perso`, sélectionne **tout ce qu'il contient** (pas le dossier lui-même) et glisse-le dans la page GitHub. Les dossiers `css`, `js` et `icons` doivent apparaître.
+5. Décompresse le fichier `sika-v0.2.zip` sur l'ordinateur. Ouvre le dossier `sika`, sélectionne **tout ce qu'il contient** (pas le dossier lui-même) et glisse-le dans la page GitHub. Les dossiers `css`, `js` et `icons` doivent apparaître.
 6. En bas, clique **Commit changes**.
 7. Va dans **Settings** → **Pages**. Sous « Build and deployment » : Source = **Deploy from a branch**, Branch = **main**, dossier **/ (root)**. Clique **Save**.
 8. Attends 1 à 3 minutes. L'adresse de l'app s'affiche en haut de la page Pages : `https://[COMPTE].github.io/app/`.
@@ -59,7 +61,7 @@ Fais-les dans l'ordre et note ce qui ne se passe pas comme prévu.
 | 4 | Ne touche à rien pendant 3 min | Le coffre se verrouille tout seul |
 | 5 | Ouvre l'app, puis appuie sur le bouton d'accueil du téléphone et reviens | Le coffre est verrouillé |
 | 6 | Coupe le Wi-Fi et les données mobiles, puis ferme et rouvre l'app | L'app s'ouvre quand même |
-| 7 | Réglages → **Télécharger la sauvegarde** | Un fichier `finances-sauvegarde-AAAA-MM-JJ.bak` apparaît dans Téléchargements |
+| 7 | Réglages → **Télécharger la sauvegarde** | Un fichier `sika-sauvegarde-AAAA-MM-JJ.bak` apparaît dans Téléchargements |
 | 8 | Si le bouton **Partager** s'affiche : envoie la sauvegarde vers Google Drive | Le fichier est dans Drive |
 | 9 | Réglages → **Stockage** | Note ce qui est écrit (« protégé » ou « non protégé ») |
 | 10 | Réglages → **Test agenda** : essaie les 2 boutons | Note lequel ajoute un rappel dans ton agenda |

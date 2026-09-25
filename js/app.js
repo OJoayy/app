@@ -5,7 +5,7 @@ import * as C from './crypto.js';
 import * as S from './store.js';
 import { t, setLang, getLang, applyI18n } from './i18n.js';
 
-const APP_VERSION = '0.1';
+const APP_VERSION = '0.2';
 const DATA_SCHEMA = 1;
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
@@ -442,7 +442,7 @@ async function buildBackup(name, type) {
 // Android ne partage que certains types de fichiers : on teste .bak, puis .txt.
 async function shareableBackup() {
   if (!navigator.canShare) return null;
-  const base = `finances-sauvegarde-${ymd()}`;
+  const base = `sika-sauvegarde-${ymd()}`;
   for (const [ext, type] of [['.bak', 'application/octet-stream'], ['.txt', 'text/plain']]) {
     const probe = new File(['x'], base + ext, { type });
     try { if (navigator.canShare({ files: [probe] })) return { name: base + ext, type }; } catch { /* suivant */ }
@@ -474,7 +474,7 @@ async function onExportDownload() {
   if (isBusy() || !session) return;
   busy(true);
   try {
-    const file = await buildBackup(`finances-sauvegarde-${ymd()}.bak`, 'application/octet-stream');
+    const file = await buildBackup(`sika-sauvegarde-${ymd()}.bak`, 'application/octet-stream');
     downloadFile(file);
     await markBackup(t('exportDownloaded', { name: file.name }));
   } catch {
@@ -656,9 +656,9 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//finances-perso//v0.1//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.2//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
-    `UID:${uid}@finances-perso`,
+    `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,
     `DTSTART:${icsStamp(start)}`,
     `DTEND:${icsStamp(end)}`,

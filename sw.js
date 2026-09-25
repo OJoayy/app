@@ -1,7 +1,7 @@
 // sw.js — garde l'app en mémoire pour qu'elle s'ouvre sans internet.
 // À chaque nouvelle version : changer VERSION, sinon le téléphone garde l'ancienne.
 
-const VERSION = 'fp-v0.1';
+const VERSION = 'fp-v0.2';
 const FILES = [
   './',
   './index.html',

@@ -3,7 +3,7 @@
 
 const T = {
   fr: {
-    appName: 'Finances Perso',
+    appName: 'Sika',
     loading: 'Chargement…',
     working: 'Un instant…',
     back: 'Retour',
@@ -121,7 +121,7 @@ const T = {
   },
 
   en: {
-    appName: 'Personal Finances',
+    appName: 'Sika',
     loading: 'Loading…',
     working: 'One moment…',
     back: 'Back',
