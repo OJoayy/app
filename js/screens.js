@@ -4,6 +4,8 @@
 
 import * as L from './ledger.js';
 import { t, getLang } from './i18n.js';
+import * as FX from './fx.js';
+import * as W from './widgets.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -126,11 +128,18 @@ export function renderHome() {
   const data = ctx.data();
   const b = L.computeBalances(data);
   $('home-total').textContent = money(b.liquid);
+  // Même solde en € et en £ (le € est fixe ; le £ dépend du taux du jour).
+  const lang = getLang();
+  const eur = FX.formatMoney(FX.toEur(b.liquid), 'EUR', lang);
+  const fx = FX.cleanFx(data.fx);
+  $('home-fx').textContent = fx ? `≈ ${FX.formatMoney(FX.toGbp(b.liquid, fx), 'GBP', lang)} · ${eur}` : `≈ ${eur}`;
+  $('home-fx-note').textContent = !fx ? t('fxNone')
+    : FX.isStale(fx) ? t('fxStale', { date: fmtDay(fx.date + 'T12:00:00Z') })
+      : t('fxDate', { date: fmtDay(fx.date + 'T12:00:00Z') });
   $('home-pools-note').textContent = t('poolsTotalNote', { x: money(b.poolTotal) });
   const noAccount = data.accounts.filter((a) => !a.archived).length === 0;
   $('home-empty').hidden = !noAccount;
-  $('home-actions').hidden = noAccount;
-  $('btn-new-transfer').hidden = data.accounts.filter((a) => !a.archived).length < 2;
+  refreshDiscreet();
   fillList($('home-expenses'), data, L.sortedTx(data, (x) => x.type === 'expense').slice(0, 5), 'emptyExpenses');
   fillList($('home-incomes'), data, L.sortedTx(data, (x) => x.type === 'income').slice(0, 5), 'emptyIncomes');
   ctx.renderHomeExtras();
@@ -170,7 +179,6 @@ export function renderAccounts() {
     for (const a of archived) card.append(accountRow(a, b.accounts.get(a.id)));
     groups.append(card);
   }
-  $('btn-acc-transfer').hidden = active.length < 2;
 }
 
 function accountRow(a, balance) {
@@ -204,7 +212,7 @@ function accountOptions(select, data, selectedId, excludeId) {
   for (const a of data.accounts) {
     if (a.archived && a.id !== selectedId) continue;
     if (a.id === excludeId) continue;
-    const o = el('option', null, `${a.name} (${money(b.accounts.get(a.id))})`);
+    const o = el('option', null, ctx.isDiscreet() ? a.name : `${a.name} (${money(b.accounts.get(a.id))})`);
     o.value = a.id;
     select.append(o);
   }
@@ -300,16 +308,20 @@ function updateTxChecks() {
   $('tx-reason-wrap').hidden = short === 0;
   if (short) {
     const poolBal = b.pools[$('tx-pool').value];
-    nogo.textContent = poolBal > 0
-      ? t('nogo', { pool: poolName($('tx-pool').value), x: money(short) })
-      : t('nogoEmpty', { pool: poolName($('tx-pool').value), bal: money(poolBal) });
+    // En mode discret, aucun montant dans les messages.
+    nogo.textContent = ctx.isDiscreet() ? t('nogoDiscreet', { pool: poolName($('tx-pool').value) })
+      : poolBal > 0 ? t('nogo', { pool: poolName($('tx-pool').value), x: money(short) })
+        : t('nogoEmpty', { pool: poolName($('tx-pool').value), bal: money(poolBal) });
   }
 
   const warn = $('tx-acc-warn');
   const fromId = $('tx-from').value;
   const low = txType !== 'income' && amount && fromId && b.accounts.get(fromId) < amount;
   warn.hidden = !low;
-  if (low) warn.textContent = t('accountLow', { name: accountName(data, fromId), x: money(b.accounts.get(fromId)) });
+  if (low) {
+    warn.textContent = ctx.isDiscreet() ? t('accountLowDiscreet', { name: accountName(data, fromId) })
+      : t('accountLow', { name: accountName(data, fromId), x: money(b.accounts.get(fromId)) });
+  }
 }
 
 // Date choisie -> date ISO. Aujourd'hui = l'heure actuelle (garde l'ordre).
@@ -367,7 +379,7 @@ async function onTxDelete() {
   if (!editing || ctx.isBusy()) return;
   const data = ctx.data();
   const target = editing;
-  if (!(await ctx.ask(t('deleteConfirm', { x: money(target.amount) })))) return;
+  if (!(await ctx.ask(ctx.isDiscreet() ? t('deleteConfirmDiscreet') : t('deleteConfirm', { x: money(target.amount) })))) return;
   if (ctx.data() !== data) return; // verrouillé pendant la question
   const before = data.tx.slice();
   data.tx = data.tx.filter((x) => x.id !== target.id);
@@ -493,6 +505,32 @@ export function isTab(id) {
   return TABS.includes(id);
 }
 
+// ---------- Bouton + flottant ----------
+
+export function toggleFab(open) {
+  const data = ctx.data();
+  const want = open === undefined ? $('fab-menu').hidden : open;
+  if (want && data) {
+    const active = data.accounts.filter((a) => !a.archived).length;
+    // Sans compte, le + ouvre directement la création d'un compte.
+    if (!active) { toggleFab(false); openAccountForm(); return; }
+    $('fab-transfer').hidden = active < 2;
+  }
+  $('fab-menu').hidden = !want;
+  $('fab-backdrop').hidden = !want;
+  $('fab').classList.toggle('open', want);
+  $('fab').setAttribute('aria-expanded', String(want));
+}
+
+// ---------- Mode discret ----------
+
+export function refreshDiscreet() {
+  const on = ctx.isDiscreet();
+  const btn = $('btn-discreet');
+  btn.replaceChildren(W.eyeIcon(!on));
+  btn.setAttribute('aria-pressed', String(on));
+}
+
 // Valeurs actuelles du formulaire ouvert, pour détecter une saisie en cours.
 function snapshot() {
   const ids = $('s-tx').hidden
@@ -519,7 +557,8 @@ export async function back() {
 
 // Au verrouillage : effacer tout ce qui montre de l'argent.
 export function clearAll() {
-  for (const id of ['home-total', 'home-pools-note', 'acc-total']) $(id).textContent = '';
+  for (const id of ['home-total', 'home-fx', 'home-fx-note', 'home-pools-note', 'acc-total', 'acc-current']) $(id).textContent = '';
+  toggleFab(false);
   for (const id of ['home-expenses', 'home-incomes', 'pool-grid', 'acc-groups', 'hist-list', 'tx-split', 'tx-from', 'tx-to']) {
     $(id).replaceChildren();
   }
@@ -550,10 +589,17 @@ export function initScreens(context) {
   for (const c of document.querySelectorAll('#hist-filters .chip')) c.onclick = () => { histFilter = c.dataset.filter; histLimit = 200; renderHistory(); };
   $('btn-hist-more').onclick = () => { histLimit += 200; renderHistory(); };
 
-  $('btn-new-income').onclick = () => openTxForm('income');
-  $('btn-new-expense').onclick = () => openTxForm('expense');
-  $('btn-new-transfer').onclick = () => openTxForm('transfer');
-  $('btn-acc-transfer').onclick = () => openTxForm('transfer');
+  // Ouvrir le menu ajoute une étape "retour" ; le fermer à la main la retire.
+  $('fab').onclick = () => {
+    const open = $('fab-menu').hidden;
+    toggleFab(open);
+    if (open && !$('fab-menu').hidden) ctx.pushBackGuard(); else ctx.syncBack();
+  };
+  $('fab-backdrop').onclick = () => { toggleFab(false); ctx.syncBack(); };
+  $('fab-income').onclick = () => { toggleFab(false); openTxForm('income'); };
+  $('fab-expense').onclick = () => { toggleFab(false); openTxForm('expense'); };
+  $('fab-transfer').onclick = () => { toggleFab(false); openTxForm('transfer'); };
+  $('btn-discreet').onclick = () => ctx.toggleDiscreet();
   $('btn-home-add-account').onclick = () => openAccountForm();
   $('btn-add-account').onclick = () => openAccountForm();
 

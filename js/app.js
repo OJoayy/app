@@ -1,13 +1,16 @@
 // app.js — le "chef d'orchestre" : écrans, verrouillage, sauvegardes.
-// v0.4 : coffre-fort, comptes/pools/opérations, code PIN, bouton retour.
+// v0.5 : coffre-fort, comptes/pools/opérations, code PIN, bouton retour,
+// devises (FCFA, €, £) et mode discret.
 
 import * as C from './crypto.js';
 import * as S from './store.js';
 import { t, setLang, getLang, applyI18n } from './i18n.js';
 import * as L from './ledger.js';
 import * as screens from './screens.js';
+import * as W from './widgets.js';
+import * as FX from './fx.js';
 
-const APP_VERSION = '0.4';
+const APP_VERSION = '0.5';
 const PASS_EVERY_MS = 7 * 86400000; // la phrase est redemandée tous les 7 jours
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
@@ -24,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 // ---------- État ----------
 // session = null quand le coffre est verrouillé.
 let session = null; // { key, meta, data }
-let prefs = { lang: 'fr', lockMinutes: 3 };
+let prefs = { lang: 'fr', lockMinutes: 3, discreet: false, fxOnline: true };
 let lastActivity = Date.now();
 let suppressLockUntil = 0; // pendant le choix d'un fichier ou un partage
 let pending = null; // nouveau coffre (création ou changement de phrase) en attente de la clé de secours
@@ -42,6 +45,8 @@ function show(id) {
   // La barre d'onglets n'apparaît que coffre ouvert, sur les 4 onglets.
   const tabs = Boolean(session) && screens.isTab(id);
   $('tabbar').hidden = !tabs;
+  $('fab').hidden = !tabs || id === 's-settings'; // pas de + dans les Réglages
+  if (!$('fab-menu').hidden) screens.toggleFab(false);
   document.body.classList.toggle('has-tabs', tabs);
   for (const b of document.querySelectorAll('[data-tab]')) {
     b.classList.toggle('active', b.dataset.tab === id);
@@ -78,6 +83,7 @@ window.addEventListener('popstate', () => {
   if (ignorePops > 0) { ignorePops -= 1; return; }
   backGuard = false;
   const cur = currentScreen();
+  if (!$('fab-menu').hidden) { screens.toggleFab(false); syncHistory(cur); return; }
   if (isBusy() || !$('modal').hidden) {
     if (!$('modal').hidden && askCancel) askCancel();
     syncHistory(cur); // on reste sur place
@@ -122,16 +128,15 @@ function clearInputs(...ids) {
 }
 
 function hideSecrets() {
-  for (const c of document.querySelectorAll('.show-pass')) {
-    c.checked = false;
-    for (const id of c.dataset.target.split(',')) $(id).type = 'password';
-  }
+  W.hideAllSecrets();
 }
 
 function sanitizePrefs(p) {
   const out = {};
   if (p && (p.lang === 'fr' || p.lang === 'en')) out.lang = p.lang;
   if (p && [1, 3, 5].includes(p.lockMinutes)) out.lockMinutes = p.lockMinutes;
+  if (p && typeof p.discreet === 'boolean') out.discreet = p.discreet;
+  if (p && typeof p.fxOnline === 'boolean') out.fxOnline = p.fxOnline;
   return out;
 }
 
@@ -185,12 +190,22 @@ const validateData = (d) => L.migrateAndValidate(d);
 const newData = () => L.newData();
 const isDataProblem = (e) => e instanceof C.DataError || e instanceof C.FormatError || e instanceof L.DataShapeError;
 
-async function saveData() {
+// Les enregistrements passent l'un après l'autre (jamais deux en même temps),
+// et rien n'est écrit si le coffre a été verrouillé entre-temps.
+let saveChain = Promise.resolve();
+function saveData({ touch = true } = {}) {
   const s = session;
-  s.data.updatedAt = new Date().toISOString();
-  const box = await C.encryptData(s.key, s.data);
-  await S.put('data', box);
-  return box;
+  const e = epoch;
+  const job = saveChain.then(async () => {
+    if (!s || session !== s || epoch !== e) throw new Error('locked');
+    if (touch) s.data.updatedAt = new Date().toISOString();
+    const box = await C.encryptData(s.key, s.data);
+    if (session !== s || epoch !== e) throw new Error('locked');
+    await S.put('data', box);
+    return box;
+  });
+  saveChain = job.catch(() => {});
+  return job;
 }
 
 // ---------- Ouverture / verrouillage ----------
@@ -202,6 +217,7 @@ function openSession(key, meta, data, startEpoch) {
   lastActivity = Date.now();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   screens.openTab('s-home');
+  refreshFx();
   return true;
 }
 
@@ -223,6 +239,7 @@ function lock() {
   for (const id of ['export-msg', 'cp-msg', 'import-msg', 'home-msg', 'pin-msg']) setMsg(id, '');
   screens.clearAll();
   $('tabbar').hidden = true;
+  $('fab').hidden = true;
   goLock();
 }
 
@@ -318,6 +335,8 @@ async function setLockMode(forcePass = false, note = '') {
   lockMode = state === 'ok' && !forcePass ? 'pin' : 'pass';
   pinLen = rec ? rec.len : 0;
   clearInputs('lock-pin');
+  if (pinLen) W.setupPinSlots('lock-pin', pinLen, onUnlockPin);
+  else W.renderPinSlots('lock-pin');
   $('lock-pin-wrap').hidden = lockMode !== 'pin';
   $('lock-pass-wrap').hidden = lockMode !== 'pass';
   $('btn-use-pin').hidden = !(lockMode === 'pass' && state === 'ok');
@@ -364,6 +383,7 @@ async function onUnlockPin() {
     setMsg('lock-msg', isDataProblem(e) ? t('errDataDamaged') : t('errGeneric'));
   } finally {
     clearInputs('lock-pin');
+    W.renderPinSlots('lock-pin');
     busy(false);
     if (disabled) await goLock(true, t('pinDisabled'));
     else if (expired) await goLock(true);
@@ -385,7 +405,7 @@ async function onPinSave() {
     if (session !== s) return; // verrouillé entre-temps
     await S.put('pin', rec);
     await attemptSucceeded('pass'); // la phrase vient d'être prouvée
-    clearInputs('pin-pass', 'pin-new', 'pin-new2');
+    closePinForm();
     $('pin-msg').className = 'ok';
     setMsg('pin-msg', t('pinSaved'));
     await renderPinStatus();
@@ -408,6 +428,47 @@ async function renderPinStatus() {
   const has = Boolean(await S.get('pin'));
   $('pin-status').textContent = has ? t('pinOn') : t('pinOff');
   $('btn-pin-remove').hidden = !has;
+  $('btn-pin-open').textContent = t(has ? 'pinChange' : 'pinCreate');
+}
+
+// Les champs du PIN n'apparaissent qu'après un appui sur "Créer" / "Changer".
+function openPinForm() {
+  $('pin-form').hidden = false;
+  $('pin-actions').hidden = true;
+  setMsg('pin-msg', '');
+  W.setupPinSlots('pin-new', C.PIN_LENGTH);
+  W.setupPinSlots('pin-new2', C.PIN_LENGTH);
+  W.revealPin(['pin-new', 'pin-new2'], false);
+  $('btn-pin-show').textContent = t('pinShow');
+  $('pin-pass').focus();
+}
+
+function closePinForm() {
+  clearInputs('pin-pass', 'pin-new', 'pin-new2');
+  W.revealPin(['pin-new', 'pin-new2'], false);
+  hideSecrets();
+  $('pin-form').hidden = true;
+  $('pin-actions').hidden = false;
+}
+
+function togglePinReveal() {
+  const on = !document.querySelector('.pin-slots[data-for="pin-new"]').classList.contains('reveal');
+  W.revealPin(['pin-new', 'pin-new2'], on);
+  $('btn-pin-show').textContent = t(on ? 'pinHide' : 'pinShow');
+}
+
+function openCpForm() {
+  $('cp-form').hidden = false;
+  $('btn-cp-open').hidden = true;
+  setMsg('cp-msg', '');
+  $('cp-old').focus();
+}
+
+function closeCpForm() {
+  clearInputs('cp-old', 'cp-new', 'cp-new2');
+  hideSecrets();
+  $('cp-form').hidden = true;
+  $('btn-cp-open').hidden = false;
 }
 
 // Bloque les boutons Ouvrir tant que l'attente n'est pas finie.
@@ -459,6 +520,31 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => { epoch += 1; if (session) lock(); });
 
+// ---------- Mode discret et taux de change ----------
+
+function applyDiscreet() {
+  document.body.classList.toggle('discreet', prefs.discreet);
+  screens.refreshDiscreet();
+}
+
+// Taux € -> £ du jour, au plus toutes les 12 h, seulement coffre ouvert.
+// En cas d'échec (hors ligne…), on garde le dernier taux connu.
+let fxLoading = false;
+async function refreshFx() {
+  if (!session || !prefs.fxOnline || fxLoading || !FX.needsRefresh(session.data.fx) || navigator.onLine === false) return;
+  fxLoading = true;
+  const s = session;
+  try {
+    const fx = await FX.fetchRate();
+    if (session !== s) return;
+    s.data.fx = fx;
+    await saveData({ touch: false }); // un taux n'est pas une modification de tes données
+    if (session === s && !$('s-home').hidden) screens.renderHome();
+  } catch { /* hors ligne ou service indisponible : on garde l'ancien taux */ } finally {
+    fxLoading = false;
+  }
+}
+
 // ---------- Écrans ----------
 
 // Partie "coffre" de l'accueil : rappel de sauvegarde et version.
@@ -480,6 +566,7 @@ async function renderSettings() {
   const last = session.data.lastBackupAt;
   $('set-last-backup').textContent = last ? t('lastBackup', { date: formatDate(last) }) : t('lastBackupNever');
   $('lock-delay').value = String(prefs.lockMinutes);
+  $('fx-online').checked = prefs.fxOnline;
   $('btn-export-share').hidden = !(await shareableBackup());
   $('link-gcal').href = gcalLink();
   let status = t('storageUnknown');
@@ -502,6 +589,8 @@ async function changeLang(l) {
   applyI18n(document);
   renderLangChips();
   syncImportMode();
+  W.setEyeLabels(t('showPass'), t('hidePass'));
+  W.hideAllSecrets(); // redessine les yeux avec les textes de la nouvelle langue
   await savePrefs();
   if (session) screens.refresh();
 }
@@ -830,8 +919,7 @@ async function onChangePass() {
     if (startEpoch !== epoch || session !== s) return; // verrouillé : rien n'a changé
     const data = { ...s.data, lastBackupAt: null }; // les anciennes sauvegardes ne suivent plus
     pending = { kind: 'rotate', meta, key, recoveryKey, data };
-    clearInputs('cp-old', 'cp-new', 'cp-new2');
-    hideSecrets();
+    closeCpForm();
     setMsg('cp-msg', '');
     showRecoveryKey(recoveryKey);
   } catch (e) {
@@ -874,7 +962,7 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.4//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.5//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,
@@ -920,9 +1008,6 @@ async function onWipe() {
 function wire() {
   for (const b of document.querySelectorAll('[data-lang]')) b.onclick = () => changeLang(b.dataset.lang);
   for (const b of document.querySelectorAll('[data-back]')) b.onclick = () => show(b.dataset.back);
-  for (const c of document.querySelectorAll('.show-pass')) {
-    c.onchange = () => { for (const id of c.dataset.target.split(',')) $(id).type = c.checked ? 'text' : 'password'; };
-  }
   const onEnter = (id, fn) => { $(id).onkeydown = (e) => { if (e.key === 'Enter') fn(); }; };
 
   $('btn-go-create').onclick = () => { setMsg('create-err', ''); show('s-create'); };
@@ -937,15 +1022,15 @@ function wire() {
   $('btn-unlock-pin').onclick = onUnlockPin;
   onEnter('lock-pin', onUnlockPin);
   // Ouverture automatique dès que le code a la bonne longueur.
-  $('lock-pin').addEventListener('input', () => {
-    const v = $('lock-pin').value;
-    if (!/^\d*$/.test(v)) $('lock-pin').value = v.replace(/\D/g, '');
-    if (pinLen && $('lock-pin').value.length === pinLen) onUnlockPin();
-  });
   $('btn-use-pass').onclick = () => goLock(true);
   $('btn-use-pin').onclick = () => goLock(false);
   $('btn-pin-save').onclick = onPinSave;
   $('btn-pin-remove').onclick = onPinRemove;
+  $('btn-pin-open').onclick = openPinForm;
+  $('btn-pin-cancel').onclick = () => { closePinForm(); setMsg('pin-msg', ''); };
+  $('btn-pin-show').onclick = togglePinReveal;
+  $('btn-cp-open').onclick = openCpForm;
+  $('btn-cp-cancel').onclick = () => { closeCpForm(); setMsg('cp-msg', ''); };
   $('btn-go-recover').onclick = () => { setMsg('recover-err', ''); show('s-recover'); updateCountdown(); };
   $('btn-recover').onclick = onRecover;
   $('btn-lock-restore').onclick = goImport;
@@ -957,6 +1042,7 @@ function wire() {
   $('btn-go-import').onclick = goImport;
   $('btn-change-pass').onclick = onChangePass;
   $('lock-delay').onchange = async () => { prefs.lockMinutes = Number($('lock-delay').value); await savePrefs(); };
+  $('fx-online').onchange = async () => { prefs.fxOnline = $('fx-online').checked; await savePrefs(); if (prefs.fxOnline) refreshFx(); };
   $('btn-ics').onclick = onIcs;
   $('btn-wipe').onclick = onWipe;
 
@@ -1001,6 +1087,8 @@ async function init() {
   }
   setLang(prefs.lang);
   applyI18n(document);
+  W.setEyeLabels(t('showPass'), t('hidePass'));
+  W.enhanceSecrets();
   renderLangChips();
   wire();
   screens.initScreens({
@@ -1013,10 +1101,21 @@ async function init() {
     show,
     ask,
     isBusy,
-    renderSettings: () => { $('cp-msg').textContent = ''; $('pin-msg').textContent = ''; return renderSettings(); },
+    renderSettings: () => {
+      $('cp-msg').textContent = '';
+      $('pin-msg').textContent = '';
+      closePinForm();
+      closeCpForm();
+      return renderSettings();
+    },
     renderHomeExtras,
     suppressLock: (on) => { suppressLockUntil = on ? Date.now() + 120000 : 0; },
+    isDiscreet: () => prefs.discreet,
+    pushBackGuard: () => { if (!backGuard) { history.pushState({ sika: 1 }, ''); backGuard = true; } },
+    syncBack: () => syncHistory(currentScreen()),
+    toggleDiscreet: async () => { prefs.discreet = !prefs.discreet; applyDiscreet(); await savePrefs(); },
   });
+  applyDiscreet();
   registerServiceWorker();
   await goLock();
 }

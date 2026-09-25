@@ -2,6 +2,8 @@
 // Pas d'écran ici : seulement des calculs, faciles à tester.
 // Tous les montants sont des FCFA entiers (le FCFA n'a pas de centimes).
 
+import { cleanFx } from './fx.js';
+
 export const DATA_SCHEMA = 2;
 // Garde-fous : 100 milliards FCFA par montant, 50 000 opérations.
 // Ainsi, même le plus grand total reste un nombre exact en JavaScript.
@@ -188,7 +190,7 @@ export function cleanTx(t, accountIds) {
 // Données vides d'un nouveau coffre.
 export function newData() {
   const now = new Date().toISOString();
-  return { schema: DATA_SCHEMA, createdAt: now, updatedAt: now, lastBackupAt: null, accounts: [], tx: [] };
+  return { schema: DATA_SCHEMA, createdAt: now, updatedAt: now, lastBackupAt: null, fx: null, accounts: [], tx: [] };
 }
 
 // Vérifie tout le contenu déchiffré, et met à jour les anciennes versions.
@@ -214,6 +216,7 @@ export function migrateAndValidate(d) {
     createdAt: isDate(d.createdAt) ? d.createdAt : new Date().toISOString(),
     updatedAt: isDate(d.updatedAt) ? d.updatedAt : new Date().toISOString(),
     lastBackupAt: d.lastBackupAt ?? null,
+    fx: cleanFx(d.fx),
     accounts,
     tx,
   };

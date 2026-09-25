@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- Règle de sécurité : l'app ne peut charger que son propre code.
        Aucun script, style, image ou connexion venant d'ailleurs. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'self' https://api.frankfurter.dev; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#800020">
   <title>SIKA</title>
@@ -51,7 +51,6 @@
     <label><span data-i18n="passConfirmLabel"></span>
       <input id="create-pass2" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
     </label>
-    <label class="check"><input type="checkbox" class="show-pass" data-target="create-pass,create-pass2"> <span data-i18n="showPass"></span></label>
     <p id="create-err" class="error" role="alert"></p>
     <button type="button" id="btn-create" class="primary" data-i18n="createBtn"></button>
     <button type="button" class="link" data-back="s-welcome" data-i18n="back"></button>
@@ -70,7 +69,6 @@
     <label><span data-i18n="recVerifyLabel"></span>
       <input id="reckey-verify" type="password" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
     </label>
-    <label class="check"><input type="checkbox" class="show-pass" data-target="reckey-verify"> <span data-i18n="showPass"></span></label>
     <p id="reckey-err" class="error" role="alert"></p>
     <button type="button" id="btn-reckey-done" class="primary" data-i18n="recDone" disabled></button>
     <button type="button" id="btn-reckey-cancel" class="link" data-i18n="recCancel"></button>
@@ -80,9 +78,11 @@
   <section id="s-lock" class="screen" hidden>
     <div class="brand" data-i18n="appName"></div>
     <div id="lock-pin-wrap" class="stack" hidden>
-      <label><span data-i18n="pinLabel"></span>
-        <input id="lock-pin" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off">
-      </label>
+      <p class="center-text lead" id="lock-pin-title" data-i18n="pinAsk"></p>
+      <div class="pin-box">
+        <div class="pin-slots" data-for="lock-pin" aria-hidden="true"></div>
+        <input id="lock-pin" class="pin-hidden" type="text" autocorrect="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off" aria-labelledby="lock-pin-title">
+      </div>
       <button type="button" id="btn-unlock-pin" class="primary" data-i18n="unlockBtn"></button>
       <button type="button" id="btn-use-pass" class="link" data-i18n="usePass"></button>
     </div>
@@ -91,7 +91,6 @@
       <label><span data-i18n="passLabel"></span>
         <input id="lock-pass" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
       </label>
-      <label class="check"><input type="checkbox" class="show-pass" data-target="lock-pass"> <span data-i18n="showPass"></span></label>
       <button type="button" id="btn-unlock" class="primary" data-i18n="unlockBtn"></button>
       <button type="button" id="btn-use-pin" class="link" data-i18n="usePin" hidden></button>
     </div>
@@ -115,7 +114,6 @@
     <label><span data-i18n="passConfirmLabel"></span>
       <input id="recover-pass2" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
     </label>
-    <label class="check"><input type="checkbox" class="show-pass" data-target="recover-key,recover-pass,recover-pass2"> <span data-i18n="showPass"></span></label>
     <p id="recover-err" class="error" role="alert"></p>
     <button type="button" id="btn-recover" class="primary" data-i18n="recoverBtn"></button>
     <button type="button" class="link" data-back="s-lock" data-i18n="back"></button>
@@ -132,20 +130,18 @@
     <div id="home-msg" class="banner warn" role="status"></div>
     <div id="home-backup-warn" class="banner warn" role="status" hidden></div>
     <div class="card total">
+      <button type="button" id="btn-discreet" class="eye-btn" data-i18n-aria="discreetToggle"></button>
       <p class="muted" data-i18n="liquidTitle"></p>
-      <p id="home-total" class="big"></p>
-      <p id="home-pools-note" class="muted"></p>
+      <p id="home-total" class="big money"></p>
+      <p id="home-fx" class="fx money"></p>
+      <p id="home-fx-note" class="muted small-note"></p>
+      <p id="home-pools-note" class="muted money"></p>
     </div>
     <div id="home-empty" class="card" hidden>
       <h2 data-i18n="emptyTitle"></h2>
       <p class="muted" data-i18n="emptyText"></p>
       <button type="button" id="btn-home-add-account" class="primary" data-i18n="addAccount"></button>
     </div>
-    <div id="home-actions" class="row actions">
-      <button type="button" id="btn-new-income" class="primary" data-i18n="newIncome"></button>
-      <button type="button" id="btn-new-expense" class="secondary" data-i18n="newExpense"></button>
-    </div>
-    <button type="button" id="btn-new-transfer" class="secondary" data-i18n="newTransfer"></button>
     <div class="card">
       <h2 data-i18n="lastExpenses"></h2>
       <div id="home-expenses" class="list"></div>
@@ -162,14 +158,13 @@
     <h1 data-i18n="accountsTitle"></h1>
     <div class="card total">
       <p class="muted" data-i18n="liquidTitle"></p>
-      <p id="acc-total" class="big"></p>
+      <p id="acc-total" class="big money"></p>
       <button type="button" id="btn-add-account" class="secondary" data-i18n="addAccount"></button>
     </div>
     <h2 data-i18n="poolsTitle"></h2>
     <div id="pool-grid" class="pool-grid"></div>
     <h2 data-i18n="accountsListTitle"></h2>
     <div id="acc-groups"></div>
-    <button type="button" id="btn-acc-transfer" class="secondary" data-i18n="newTransfer"></button>
   </section>
 
   <!-- Historique -->
@@ -270,35 +265,49 @@
     <div class="card">
       <h2 data-i18n="pinTitle"></h2>
       <p id="pin-status" class="muted"></p>
-      <label><span data-i18n="currentPassLabel"></span>
-        <input id="pin-pass" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-      </label>
-      <label><span data-i18n="pinNew"></span>
-        <input id="pin-new" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off">
-      </label>
-      <label><span data-i18n="pinConfirm"></span>
-        <input id="pin-new2" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="off">
-      </label>
       <p id="pin-msg" class="error" role="alert"></p>
-      <button type="button" id="btn-pin-save" class="secondary" data-i18n="pinSave"></button>
-      <button type="button" id="btn-pin-remove" class="link" data-i18n="pinRemove" hidden></button>
+      <div id="pin-actions" class="row">
+        <button type="button" id="btn-pin-open" class="secondary"></button>
+        <button type="button" id="btn-pin-remove" class="secondary" data-i18n="pinRemove" hidden></button>
+      </div>
+      <div id="pin-form" class="stack" hidden>
+        <label><span data-i18n="currentPassLabel"></span>
+          <input id="pin-pass" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </label>
+        <p class="field-label" id="pin-new-title" data-i18n="pinNew"></p>
+        <div class="pin-box">
+          <div class="pin-slots" data-for="pin-new" aria-hidden="true"></div>
+          <input id="pin-new" class="pin-hidden" type="text" autocorrect="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" maxlength="7" autocomplete="off" aria-labelledby="pin-new-title">
+        </div>
+        <p class="field-label" id="pin-new2-title" data-i18n="pinConfirm"></p>
+        <div class="pin-box">
+          <div class="pin-slots" data-for="pin-new2" aria-hidden="true"></div>
+          <input id="pin-new2" class="pin-hidden" type="text" autocorrect="off" spellcheck="false" inputmode="numeric" pattern="[0-9]*" maxlength="7" autocomplete="off" aria-labelledby="pin-new2-title">
+        </div>
+        <button type="button" id="btn-pin-show" class="link" data-i18n="pinShow"></button>
+        <button type="button" id="btn-pin-save" class="primary" data-i18n="pinSave"></button>
+        <button type="button" id="btn-pin-cancel" class="link" data-i18n="cancel"></button>
+      </div>
     </div>
 
     <div class="card">
-      <h2 data-i18n="changePassTitle"></h2>
-      <label><span data-i18n="currentPassLabel"></span>
-        <input id="cp-old" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-      </label>
-      <label><span data-i18n="newPassLabel"></span>
-        <input id="cp-new" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-      </label>
-      <label><span data-i18n="passConfirmLabel"></span>
-        <input id="cp-new2" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-      </label>
-      <label class="check"><input type="checkbox" class="show-pass" data-target="cp-old,cp-new,cp-new2"> <span data-i18n="showPass"></span></label>
-      <p class="muted" data-i18n="changePassHelp"></p>
+      <h2 data-i18n="passTitle"></h2>
       <p id="cp-msg" class="error" role="alert"></p>
-      <button type="button" id="btn-change-pass" class="secondary" data-i18n="changePassBtn"></button>
+      <button type="button" id="btn-cp-open" class="secondary" data-i18n="changePassTitle"></button>
+      <div id="cp-form" class="stack" hidden>
+        <label><span data-i18n="currentPassLabel"></span>
+          <input id="cp-old" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </label>
+        <label><span data-i18n="newPassLabel"></span>
+          <input id="cp-new" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </label>
+        <label><span data-i18n="passConfirmLabel"></span>
+          <input id="cp-new2" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </label>
+        <p class="muted" data-i18n="changePassHelp"></p>
+        <button type="button" id="btn-change-pass" class="primary" data-i18n="changePassBtn"></button>
+          <button type="button" id="btn-cp-cancel" class="link" data-i18n="cancel"></button>
+      </div>
     </div>
 
     <div class="card">
@@ -313,6 +322,8 @@
         <option value="3">3 min</option>
         <option value="5">5 min</option>
       </select>
+      <label class="check"><input type="checkbox" id="fx-online"> <span data-i18n="fxOnlineLabel"></span></label>
+      <p class="muted" data-i18n="fxOnlineHelp"></p>
     </div>
 
     <div class="card">
@@ -348,7 +359,6 @@
     <label><span id="import-secret-label" data-i18n="passLabel"></span>
       <input id="import-secret" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
     </label>
-    <label class="check"><input type="checkbox" class="show-pass" data-target="import-secret,import-pass,import-pass2"> <span data-i18n="showPass"></span></label>
     <div id="import-newpass" hidden>
       <p class="muted" data-i18n="importNewPassHelp"></p>
       <label><span data-i18n="newPassLabel"></span>
@@ -376,6 +386,17 @@
   </div>
 
   <div id="busy" class="busy" hidden><p data-i18n="working"></p></div>
+
+  <!-- Bouton + flottant et son menu -->
+  <div id="fab-backdrop" class="fab-backdrop" hidden></div>
+  <div id="fab-menu" class="fab-menu" hidden>
+    <button type="button" id="fab-income" class="primary" data-i18n="newIncome"></button>
+    <button type="button" id="fab-expense" class="primary" data-i18n="newExpense"></button>
+    <button type="button" id="fab-transfer" class="primary" data-i18n="newTransfer"></button>
+  </div>
+  <button type="button" id="fab" class="fab" data-i18n-aria="addTx" aria-expanded="false" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
 
   <!-- Barre d'onglets (coffre ouvert seulement) -->
   <nav id="tabbar" class="tabbar" hidden>

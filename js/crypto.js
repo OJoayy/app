@@ -263,6 +263,9 @@ export async function recoverAndReset(meta, recoveryInput, newPass) {
 
 const AAD_PIN = enc.encode('fp-v1-pin');
 export const PIN_MAX_TRIES = 5;
+// Nouveaux codes : exactement 7 chiffres (10 millions de possibilités).
+// Les anciens codes à 6 chiffres (v0.4) restent valables jusqu'au prochain changement.
+export const PIN_LENGTH = 7;
 // Codes très courants (en plus des suites et répétitions refusées plus bas).
 const COMMON_PINS = new Set(['123321', '654456', '159753', '147258', '258369', '369258', '102030', '010203',
   '112211', '121121', '123654', '147852', '963852', '741852', '789456', '456789', '314159', '696969', '007007', '520520', '131313']);
@@ -270,10 +273,12 @@ const COMMON_PINS = new Set(['123321', '654456', '159753', '147258', '258369', '
 // Renvoie null si le PIN est acceptable, sinon le code de l'erreur.
 export function checkPin(pin) {
   const p = String(pin);
-  if (!/^\d{6,12}$/.test(p)) return 'errPinFormat';
+  if (!new RegExp(`^\\d{${PIN_LENGTH}}$`).test(p)) return 'errPinFormat';
   if (/^(\d)\1+$/.test(p)) return 'errPinWeak';
   if ('01234567890123'.includes(p) || '98765432109876'.includes(p)) return 'errPinWeak';
   if (COMMON_PINS.has(p)) return 'errPinWeak';
+  if (new Set(p).size <= 2) return 'errPinWeak'; // ex. 1212121, 1112111
+  if (/^(\d{3})\1/.test(p)) return 'errPinWeak'; // ex. 1231231
   // Motifs répétés : 121212, 123123, 112233…
   if (/^(\d\d)\1+$/.test(p) || /^(\d\d\d)\1+$/.test(p) || /^(\d)\1(\d)\2(\d)\3$/.test(p)) return 'errPinWeak';
   return null;

@@ -324,3 +324,162 @@ body.has-tabs main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .avatar.cat-bank { background: var(--bordeaux); }
 .acc-image-row { display: flex; align-items: center; gap: 10px; }
 .acc-image-row button { width: auto; }
+
+/* ---------- v0.5 ---------- */
+
+/* Écrans d'entrée centrés verticalement. */
+#s-lock:not([hidden]), #s-welcome:not([hidden]) {
+  min-height: calc(100vh - 40px);
+  min-height: calc(100dvh - 40px);
+  justify-content: center;
+}
+.lead { font-size: 1rem; font-weight: 600; color: var(--text); }
+
+/* Œil DANS les champs secrets. */
+.secret { position: relative; display: block; }
+.secret input { padding-right: 46px; }
+.eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+.eye svg, .eye-btn svg, .fab svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Flèche des listes déroulantes, bien à l'intérieur du champ. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6461' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  background-size: 16px;
+}
+
+/* Espace entre les blocs de comptes (Mobile Money, Espèces, Banque). */
+#acc-groups { display: flex; flex-direction: column; gap: 10px; }
+
+/* Code PIN : une case ronde par chiffre. Le vrai champ est posé dessus, invisible. */
+.pin-box { position: relative; display: flex; justify-content: center; }
+.pin-slots { display: flex; gap: 10px; justify-content: center; }
+.pin-slots .slot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  position: relative;
+}
+.pin-slots .slot.current { border-color: var(--bordeaux); box-shadow: 0 0 0 3px rgba(128, 0, 32, 0.12); }
+.pin-slots:not(.reveal) .slot.filled::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text);
+}
+input.pin-hidden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  caret-color: transparent;
+  color: transparent;
+  background: transparent;
+  font-size: 16px; /* évite le zoom automatique */
+}
+
+/* Carte du solde : œil en haut à droite. */
+.card.total { position: relative; }
+.eye-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+.fx { font-weight: 600; color: var(--text); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.small-note { font-size: 0.72rem; }
+
+/* Mode discret : tous les montants sont floutés. */
+body.discreet .money,
+body.discreet .amt,
+body.discreet .pool-amt,
+body.discreet .split-grid,
+body.discreet #acc-current {
+  filter: blur(7px);
+  user-select: none;
+}
+
+/* Bouton + flottant, au-dessus de la barre du bas. */
+.fab {
+  position: fixed;
+  right: max(16px, calc(50% - 214px));
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  width: 54px;
+  height: 54px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  background: var(--bordeaux);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(92, 0, 23, 0.35);
+  z-index: 7;
+  transition: transform 0.15s ease;
+}
+.fab svg { width: 24px; height: 24px; stroke-width: 2.2; }
+.fab.open { transform: rotate(45deg); }
+.fab-backdrop { position: fixed; inset: 0; background: rgba(20, 10, 12, 0.35); z-index: 6; }
+.fab-menu {
+  position: fixed;
+  right: max(16px, calc(50% - 214px));
+  bottom: calc(140px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 7;
+}
+.fab-menu button { width: auto; min-width: 140px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
+body.has-tabs main { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+
+/* Anciens codes longs (jusqu'à 12 chiffres) : cases plus petites. */
+.pin-slots.many { gap: 5px; }
+.pin-slots.many .slot { width: 26px; height: 26px; font-size: 0.85rem; }
+.pin-slots.many .slot.filled::after { width: 7px; height: 7px; }
