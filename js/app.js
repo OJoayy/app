@@ -1,12 +1,13 @@
 // app.js — le "chef d'orchestre" : écrans, verrouillage, sauvegardes.
-// Étape 1 du plan (v0.1) : le coffre-fort. Aucune donnée réelle.
+// v0.3 : coffre-fort (étape 1) + comptes, pools et opérations (étape 2).
 
 import * as C from './crypto.js';
 import * as S from './store.js';
 import { t, setLang, getLang, applyI18n } from './i18n.js';
+import * as L from './ledger.js';
+import * as screens from './screens.js';
 
-const APP_VERSION = '0.2';
-const DATA_SCHEMA = 1;
+const APP_VERSION = '0.3';
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
 const BACKUP_WARN_DAYS = 7;
@@ -37,6 +38,14 @@ let epoch = 0;
 
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+  // La barre d'onglets n'apparaît que coffre ouvert, sur les 4 onglets.
+  const tabs = Boolean(session) && screens.isTab(id);
+  $('tabbar').hidden = !tabs;
+  document.body.classList.toggle('has-tabs', tabs);
+  for (const b of document.querySelectorAll('[data-tab]')) {
+    b.classList.toggle('active', b.dataset.tab === id);
+    if (b.dataset.tab === id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  }
   window.scrollTo(0, 0);
 }
 
@@ -95,6 +104,7 @@ function formatDate(iso) {
 }
 
 // Fenêtre de confirmation. Si "word" est donné, il faut le taper.
+let askCancel = null; // pour fermer une question ouverte au verrouillage
 function ask(text, word) {
   return new Promise((resolve) => {
     $('modal-text').textContent = text;
@@ -104,10 +114,14 @@ function ask(text, word) {
     $('modal').hidden = false;
     const done = (ok) => {
       $('modal').hidden = true;
+      $('modal-text').textContent = '';
+      input.value = '';
       $('modal-ok').onclick = null;
       $('modal-cancel').onclick = null;
+      askCancel = null;
       resolve(ok);
     };
+    askCancel = () => done(false);
     $('modal-ok').onclick = () => {
       if (word && input.value.trim().toUpperCase() !== word) { input.focus(); return; }
       done(true);
@@ -119,17 +133,10 @@ function ask(text, word) {
 
 // ---------- Données ----------
 
-function newData() {
-  const now = new Date().toISOString();
-  return { schema: DATA_SCHEMA, createdAt: now, updatedAt: now, testNote: '', lastBackupAt: null };
-}
-
-function validateData(d) {
-  if (!d || typeof d !== 'object' || d.schema !== DATA_SCHEMA) throw new C.FormatError('data');
-  if (typeof d.testNote !== 'string' || d.testNote.length > 2000) throw new C.FormatError('note');
-  if (d.lastBackupAt !== null && typeof d.lastBackupAt !== 'string') throw new C.FormatError('backupAt');
-  return d;
-}
+// Contenu déchiffré : vérifié et mis à jour (v1 -> v2) par ledger.js.
+const validateData = (d) => L.migrateAndValidate(d);
+const newData = () => L.newData();
+const isDataProblem = (e) => e instanceof C.DataError || e instanceof C.FormatError || e instanceof L.DataShapeError;
 
 async function saveData() {
   const s = session;
@@ -147,8 +154,7 @@ function openSession(key, meta, data, startEpoch) {
   session = { key, meta, data };
   lastActivity = Date.now();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-  renderHome();
-  show('s-home');
+  screens.openTab('s-home');
   return true;
 }
 
@@ -159,13 +165,17 @@ function lock() {
   pendingImport = null;
   // Effacer ce qui est affiché. (JavaScript ne permet pas d'effacer la
   // mémoire elle-même : on retire les références, le navigateur libère.)
-  clearInputs('test-note', 'lock-pass', 'cp-old', 'cp-new', 'cp-new2', 'reckey-verify',
+  clearInputs('lock-pass', 'cp-old', 'cp-new', 'cp-new2', 'reckey-verify',
     'import-secret', 'import-pass', 'import-pass2', 'recover-key', 'recover-pass', 'recover-pass2');
   $('reckey-groups').replaceChildren();
   $('import-file').value = '';
+  if (askCancel) askCancel();
   $('modal').hidden = true;
+  $('modal-text').textContent = '';
   hideSecrets();
-  for (const id of ['note-msg', 'export-msg', 'cp-msg', 'import-msg', 'home-msg']) setMsg(id, '');
+  for (const id of ['export-msg', 'cp-msg', 'import-msg', 'home-msg']) setMsg(id, '');
+  screens.clearAll();
+  $('tabbar').hidden = true;
   goLock();
 }
 
@@ -240,8 +250,8 @@ window.addEventListener('pagehide', () => { epoch += 1; if (session) lock(); });
 
 // ---------- Écrans ----------
 
-function renderHome() {
-  $('test-note').value = session.data.testNote;
+// Partie "coffre" de l'accueil : rappel de sauvegarde et version.
+function renderHomeExtras() {
   $('home-version').textContent = t('versionLine', { v: APP_VERSION });
   const warn = $('home-backup-warn');
   const last = session.data.lastBackupAt;
@@ -281,7 +291,7 @@ async function changeLang(l) {
   renderLangChips();
   syncImportMode();
   await savePrefs();
-  if (session) { renderHome(); if (!$('s-settings').hidden) await renderSettings(); }
+  if (session) screens.refresh();
 }
 
 // ---------- Création du coffre ----------
@@ -373,7 +383,7 @@ async function onUnlock() {
     openSession(key, meta, data, startEpoch);
   } catch (e) {
     if (e instanceof C.WrongSecretError) { await registerFailure(); clearInputs('lock-pass'); failed = true; }
-    else if (e instanceof C.DataError || e instanceof C.FormatError) setMsg('lock-msg', t('errDataDamaged'));
+    else if (isDataProblem(e)) setMsg('lock-msg', t('errDataDamaged'));
     else setMsg('lock-msg', t('errGeneric'));
   } finally {
     busy(false);
@@ -403,27 +413,11 @@ async function onRecover() {
     openSession(key, meta, data, startEpoch);
   } catch (e) {
     if (e instanceof C.WrongSecretError) { await registerFailure(); failed = true; }
-    else if (e instanceof C.DataError || e instanceof C.FormatError) setMsg('recover-err', t('errDataDamaged'));
+    else if (isDataProblem(e)) setMsg('recover-err', t('errDataDamaged'));
     else setMsg('recover-err', t('errGeneric'));
   } finally {
     busy(false);
     if (failed) updateCountdown();
-  }
-}
-
-// ---------- Note de test ----------
-
-async function onSaveNote() {
-  if (isBusy() || !session) return;
-  session.data.testNote = $('test-note').value.slice(0, 2000);
-  busy(true);
-  try {
-    await saveData();
-    if (session) setMsg('note-msg', t('noteSaved'));
-  } catch {
-    setMsg('note-msg', t('errGeneric'));
-  } finally {
-    busy(false);
   }
 }
 
@@ -452,11 +446,11 @@ async function shareableBackup() {
 
 async function markBackup(msg) {
   if (!session) return;
+  const previous = session.data.lastBackupAt;
   session.data.lastBackupAt = new Date().toISOString();
-  await saveData();
+  try { await saveData(); } catch (e) { if (session) session.data.lastBackupAt = previous; throw e; }
   setMsg('export-msg', msg);
   await renderSettings();
-  renderHome();
 }
 
 function downloadFile(file) {
@@ -587,7 +581,7 @@ async function onImport() {
     if (openSession(key, meta, data, startEpoch)) setMsg('home-msg', t('importDone'));
   } catch (e) {
     if (e instanceof C.WrongSecretError) setMsg('import-msg', t('importWrongSecret'));
-    else if (e instanceof C.DataError) setMsg('import-msg', t('importDamaged'));
+    else if (e instanceof C.DataError || e instanceof L.DataShapeError) setMsg('import-msg', t('importDamaged'));
     else setMsg('import-msg', t('importBadFile'));
   } finally {
     busy(false);
@@ -656,7 +650,7 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.2//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.3//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,
@@ -720,8 +714,6 @@ function wire() {
   $('btn-lock-restore').onclick = goImport;
 
   $('btn-lock').onclick = lock;
-  $('btn-save-note').onclick = onSaveNote;
-  $('btn-go-settings').onclick = async () => { $('cp-msg').textContent = ''; await renderSettings(); show('s-settings'); };
 
   $('btn-export-dl').onclick = onExportDownload;
   $('btn-export-share').onclick = onExportShare;
@@ -774,6 +766,19 @@ async function init() {
   applyI18n(document);
   renderLangChips();
   wire();
+  screens.initScreens({
+    data: () => (session ? session.data : null),
+    save: async () => {
+      if (!session) return false;
+      busy(true);
+      try { await saveData(); return true; } catch { return false; } finally { busy(false); }
+    },
+    show,
+    ask,
+    isBusy,
+    renderSettings: () => { $('cp-msg').textContent = ''; return renderSettings(); },
+    renderHomeExtras,
+  });
   registerServiceWorker();
   await goLock();
 }

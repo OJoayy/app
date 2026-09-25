@@ -1,8 +1,8 @@
-# Sika — v0.2 (étape 1 : le coffre-fort)
+# SIKA — v0.3 (étapes 1 et 2)
 
-v0.2 = v0.1 + nouveau nom « Sika ». Rien d'autre ne change.
-
-Cette version ne gère pas encore l'argent. Elle construit et teste la base : le chiffrement, la phrase secrète, la clé de secours, le verrouillage et la sauvegarde.
+- **Étape 1 :** le coffre-fort (chiffrement, phrase secrète, clé de secours, sauvegarde).
+- **Étape 2 (nouveau) :** comptes, pools, revenus, dépenses, transferts, Go/No-Go.
+- **Nouveau look :** police Figtree, boutons ronds, nom en majuscules.
 
 **Règle : n'entre que des données fictives jusqu'à la fin de l'étape 7.**
 
@@ -27,7 +27,7 @@ Cette version ne gère pas encore l'argent. Elle construit et teste la base : le
 2. Clique **+** (en haut à droite) → **New repository**.
 3. Nom du dépôt : `app`. Visibilité : **Public**. Coche **Add a README file**. Clique **Create repository**.
 4. Dans le dépôt : **Add file** → **Upload files**.
-5. Décompresse le fichier `sika-v0.2.zip` sur l'ordinateur. Ouvre le dossier `sika`, sélectionne **tout ce qu'il contient** (pas le dossier lui-même) et glisse-le dans la page GitHub. Les dossiers `css`, `js` et `icons` doivent apparaître.
+5. Décompresse le fichier `sika-v0.3.zip` sur l'ordinateur. Ouvre le dossier `sika`, sélectionne **tout ce qu'il contient** (pas le dossier lui-même) et glisse-le dans la page GitHub. Les dossiers `css`, `js` et `icons` doivent apparaître.
 6. En bas, clique **Commit changes**.
 7. Va dans **Settings** → **Pages**. Sous « Build and deployment » : Source = **Deploy from a branch**, Branch = **main**, dossier **/ (root)**. Clique **Save**.
 8. Attends 1 à 3 minutes. L'adresse de l'app s'affiche en haut de la page Pages : `https://[COMPTE].github.io/app/`.
@@ -73,6 +73,23 @@ Fais-les dans l'ordre et note ce qui ne se passe pas comme prévu.
 
 Envoie-moi les résultats des tests 8, 9 et 10, et tout ce qui a cloché. Ne m'envoie jamais ta phrase, ta clé de secours ni un fichier de sauvegarde.
 
+## 5 bis. Tests de l'étape 2 (données fictives seulement)
+
+| # | Action | Résultat attendu |
+| --- | --- | --- |
+| 1 | Comptes → **Ajouter un compte** : « Wave », Mobile Money, solde au départ 50 000, case « Répartir » cochée | Pools : Nécessité 25 000, les 5 autres 5 000 |
+| 2 | Ajoute « Espèces », Espèces, 20 000, case **décochée** | Argent disponible : 70 000. Pools inchangés |
+| 3 | Accueil → **+ Revenu** 10 005 sur Wave | Aperçu : Nécessité 5 005, les autres 1 000 |
+| 4 | **− Dépense** 3 000, humeur Routine, pool Plaisir | Plaisir passe de 6 000 à 3 000 |
+| 5 | **− Dépense** 5 000 dans Plaisir | Bannière rouge No-Go + raison obligatoire |
+| 6 | **⇄ Transfert** 10 000 de Wave vers Espèces | Soldes des comptes changent, pools ne bougent pas |
+| 7 | Historique → touche une opération → change le montant | Tous les soldes suivent |
+| 8 | Historique → une opération → **Supprimer** | Tous les soldes suivent |
+| 9 | Verrouiller, puis rouvrir | Tout est là. Écran verrouillé : aucun montant visible |
+| 10 | Réglages → sauvegarde → Effacer → Restaurer | Comptes et opérations reviennent à l'identique |
+
+Envoie-moi seulement ce qui ne se passe pas comme prévu.
+
 ## 6. Ce qu'il faut savoir sur les sauvegardes
 
 - Une sauvegarde s'ouvre avec la phrase **valable au moment où elle a été faite**, ou avec la clé de secours de ce moment-là.
@@ -104,6 +121,9 @@ Envoie-moi les résultats des tests 8, 9 et 10, et tout ce qui a cloché. Ne m'e
 | --- | --- |
 | `index.html` | Tous les écrans. Aussi la règle de sécurité (CSP) qui bloque tout code extérieur. |
 | `css/app.css` | Couleurs et mise en page (bordeaux, cartes blanc cassé). |
+| `js/ledger.js` | Les règles d'argent : répartition 50/10, soldes, contrôle des données. |
+| `js/screens.js` | Les écrans de l'étape 2 : accueil, comptes, historique, formulaires. |
+| `fonts/` | La police Figtree et sa licence (OFL). |
 | `js/crypto.js` | Tout le chiffrement. Le fichier le plus sensible : ne le modifie pas sans me demander. |
 | `js/store.js` | Enregistre sur le téléphone (IndexedDB). Ne voit que des données déjà chiffrées. |
 | `js/i18n.js` | Tous les textes, en français et en anglais. **C'est le fichier idéal pour tes premières modifications.** |

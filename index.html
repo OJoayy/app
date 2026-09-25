@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- Règle de sécurité : l'app ne peut charger que son propre code.
        Aucun script, style, image ou connexion venant d'ailleurs. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#800020">
-  <title>Sika</title>
+  <title>SIKA</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -111,34 +112,133 @@
   </section>
 
   <!-- Accueil (coffre ouvert) -->
-  <section id="s-home" class="screen" hidden>
+  <section id="s-home" class="screen tabbed" hidden>
     <header class="bar">
       <h1 data-i18n="appName"></h1>
       <button type="button" id="btn-lock" class="secondary small" data-i18n="lockBtn"></button>
     </header>
     <div id="home-msg" class="banner warn" role="status"></div>
     <div id="home-backup-warn" class="banner warn" role="status" hidden></div>
+    <div class="card total">
+      <p class="muted" data-i18n="liquidTitle"></p>
+      <p id="home-total" class="big"></p>
+      <p id="home-pools-note" class="muted"></p>
+    </div>
+    <div id="home-empty" class="card" hidden>
+      <h2 data-i18n="emptyTitle"></h2>
+      <p class="muted" data-i18n="emptyText"></p>
+      <button type="button" id="btn-home-add-account" class="primary" data-i18n="addAccount"></button>
+    </div>
+    <div id="home-actions" class="row actions">
+      <button type="button" id="btn-new-income" class="primary" data-i18n="newIncome"></button>
+      <button type="button" id="btn-new-expense" class="secondary" data-i18n="newExpense"></button>
+    </div>
+    <button type="button" id="btn-new-transfer" class="secondary" data-i18n="newTransfer"></button>
     <div class="card">
-      <h2 data-i18n="homeVaultTitle"></h2>
-      <p data-i18n="homeVaultText"></p>
-      <p class="muted" id="home-version"></p>
+      <h2 data-i18n="lastExpenses"></h2>
+      <div id="home-expenses" class="list"></div>
     </div>
     <div class="card">
-      <h2 data-i18n="testNoteTitle"></h2>
-      <p class="muted" data-i18n="testNoteHelp"></p>
-      <textarea id="test-note" rows="4" maxlength="2000" autocomplete="off"></textarea>
-      <button type="button" id="btn-save-note" class="primary" data-i18n="save"></button>
-      <p id="note-msg" class="ok" role="status"></p>
+      <h2 data-i18n="lastIncomes"></h2>
+      <div id="home-incomes" class="list"></div>
     </div>
-    <button type="button" id="btn-go-settings" class="secondary" data-i18n="settings"></button>
+    <p class="muted center-text" id="home-version"></p>
+  </section>
+
+  <!-- Comptes et pools -->
+  <section id="s-accounts" class="screen tabbed" hidden>
+    <h1 data-i18n="accountsTitle"></h1>
+    <div class="card total">
+      <p class="muted" data-i18n="liquidTitle"></p>
+      <p id="acc-total" class="big"></p>
+      <button type="button" id="btn-add-account" class="secondary" data-i18n="addAccount"></button>
+    </div>
+    <h2 data-i18n="poolsTitle"></h2>
+    <p class="muted" data-i18n="poolsHelp"></p>
+    <div id="pool-grid" class="pool-grid"></div>
+    <h2 data-i18n="accountsListTitle"></h2>
+    <div id="acc-groups"></div>
+    <button type="button" id="btn-acc-transfer" class="secondary" data-i18n="newTransfer"></button>
+  </section>
+
+  <!-- Historique -->
+  <section id="s-history" class="screen tabbed" hidden>
+    <h1 data-i18n="historyTitle"></h1>
+    <div class="row chips" id="hist-filters">
+      <button type="button" class="chip" data-filter="all" data-i18n="filterAll"></button>
+      <button type="button" class="chip" data-filter="expense" data-i18n="filterExpense"></button>
+      <button type="button" class="chip" data-filter="income" data-i18n="filterIncome"></button>
+      <button type="button" class="chip" data-filter="transfer" data-i18n="filterTransfer"></button>
+    </div>
+    <div id="hist-list" class="list card"></div>
+    <button type="button" id="btn-hist-more" class="secondary" data-i18n="showMore" hidden></button>
+  </section>
+
+  <!-- Nouvelle opération / modifier -->
+  <section id="s-tx" class="screen" hidden>
+    <h1 id="tx-title"></h1>
+    <label><span data-i18n="amountLabel"></span>
+      <input id="tx-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+    </label>
+    <label id="tx-desc-wrap"><span id="tx-desc-label"></span>
+      <input id="tx-desc" type="text" maxlength="140" autocomplete="off">
+    </label>
+    <div id="tx-mood-wrap">
+      <p class="field-label" id="tx-mood-title" data-i18n="moodLabel"></p>
+      <div id="tx-moods" class="row chips wrap" role="group" aria-labelledby="tx-mood-title"></div>
+    </div>
+    <div id="tx-source-wrap">
+      <p class="field-label" id="tx-source-title" data-i18n="sourceLabel"></p>
+      <div id="tx-sources" class="row chips" role="group" aria-labelledby="tx-source-title"></div>
+    </div>
+    <label id="tx-from-wrap"><span id="tx-from-label"></span>
+      <select id="tx-from"></select>
+    </label>
+    <label id="tx-to-wrap"><span id="tx-to-label"></span>
+      <select id="tx-to"></select>
+    </label>
+    <label id="tx-pool-wrap"><span data-i18n="poolLabel"></span>
+      <select id="tx-pool"></select>
+    </label>
+    <label><span data-i18n="dateLabel"></span>
+      <input id="tx-date" type="date">
+    </label>
+    <div id="tx-split" class="card split" hidden></div>
+    <div id="tx-nogo" class="banner danger" role="alert" hidden></div>
+    <label id="tx-reason-wrap" hidden><span data-i18n="reasonLabel"></span>
+      <textarea id="tx-reason" rows="2" maxlength="280" autocomplete="off"></textarea>
+    </label>
+    <div id="tx-acc-warn" class="banner warn" role="status" hidden></div>
+    <p id="tx-err" class="error" role="alert"></p>
+    <button type="button" id="btn-tx-save" class="primary" data-i18n="save"></button>
+    <button type="button" id="btn-tx-delete" class="danger" data-i18n="deleteTx" hidden></button>
+    <button type="button" id="btn-tx-cancel" class="link" data-i18n="cancel"></button>
+  </section>
+
+  <!-- Compte : créer / modifier -->
+  <section id="s-account" class="screen" hidden>
+    <h1 id="acc-form-title"></h1>
+    <label><span data-i18n="accNameLabel"></span>
+      <input id="acc-name" type="text" maxlength="40" autocomplete="off" placeholder="Wave, Orange Money, Espèces…">
+    </label>
+    <p class="field-label" id="acc-cat-title" data-i18n="accCategoryLabel"></p>
+    <div id="acc-cats" class="row chips wrap" role="group" aria-labelledby="acc-cat-title"></div>
+    <p id="acc-current" class="banner info" hidden></p>
+    <label><span data-i18n="accStartLabel"></span>
+      <input id="acc-start" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+    </label>
+    <p class="muted" data-i18n="accStartHelp"></p>
+    <label class="check"><input type="checkbox" id="acc-split"> <span data-i18n="accSplitLabel"></span></label>
+    <p class="muted" data-i18n="accSplitHelp"></p>
+    <label class="check" id="acc-archived-wrap"><input type="checkbox" id="acc-archived"> <span data-i18n="accArchivedLabel"></span></label>
+    <p id="acc-err" class="error" role="alert"></p>
+    <button type="button" id="btn-acc-save" class="primary" data-i18n="save"></button>
+    <button type="button" id="btn-acc-cancel" class="link" data-i18n="cancel"></button>
   </section>
 
   <!-- Réglages -->
-  <section id="s-settings" class="screen" hidden>
-    <header class="bar">
-      <h1 data-i18n="settings"></h1>
-      <button type="button" class="secondary small" data-back="s-home" data-i18n="back"></button>
-    </header>
+  <section id="s-settings" class="screen tabbed" hidden>
+    <h1 data-i18n="settings"></h1>
 
     <div class="card">
       <h2 data-i18n="backupTitle"></h2>
@@ -173,8 +273,8 @@
         <button type="button" class="chip" data-lang="fr">Français</button>
         <button type="button" class="chip" data-lang="en">English</button>
       </div>
-      <h2 data-i18n="lockDelayTitle"></h2>
-      <select id="lock-delay">
+      <h2 id="lock-delay-title" data-i18n="lockDelayTitle"></h2>
+      <select id="lock-delay" aria-labelledby="lock-delay-title">
         <option value="1">1 min</option>
         <option value="3">3 min</option>
         <option value="5">5 min</option>
@@ -242,6 +342,14 @@
   </div>
 
   <div id="busy" class="busy" hidden><p data-i18n="working"></p></div>
+
+  <!-- Barre d'onglets (coffre ouvert seulement) -->
+  <nav id="tabbar" class="tabbar" hidden>
+    <button type="button" data-tab="s-home"><span aria-hidden="true">⌂</span><span data-i18n="tabHome"></span></button>
+    <button type="button" data-tab="s-accounts"><span aria-hidden="true">◫</span><span data-i18n="tabAccounts"></span></button>
+    <button type="button" data-tab="s-history"><span aria-hidden="true">≡</span><span data-i18n="tabHistory"></span></button>
+    <button type="button" data-tab="s-settings"><span aria-hidden="true">⚙</span><span data-i18n="tabSettings"></span></button>
+  </nav>
 </main>
 </body>
 </html>
