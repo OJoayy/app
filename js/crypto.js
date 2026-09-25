@@ -255,6 +255,54 @@ export async function recoverAndReset(meta, recoveryInput, newPass) {
   return { meta: newMeta, key };
 }
 
+// ---------- Code PIN (ouverture rapide) ----------
+// Le PIN verrouille une 3e copie de la clé des données. Cette copie reste
+// sur le téléphone : elle n'est JAMAIS mise dans une sauvegarde.
+// Un PIN de 6 chiffres est plus faible qu'une phrase : l'app le désactive
+// après 5 erreurs et redemande la phrase tous les 7 jours (voir app.js).
+
+const AAD_PIN = enc.encode('fp-v1-pin');
+export const PIN_MAX_TRIES = 5;
+// Codes très courants (en plus des suites et répétitions refusées plus bas).
+const COMMON_PINS = new Set(['123321', '654456', '159753', '147258', '258369', '369258', '102030', '010203',
+  '112211', '121121', '123654', '147852', '963852', '741852', '789456', '456789', '314159', '696969', '007007', '520520', '131313']);
+
+// Renvoie null si le PIN est acceptable, sinon le code de l'erreur.
+export function checkPin(pin) {
+  const p = String(pin);
+  if (!/^\d{6,12}$/.test(p)) return 'errPinFormat';
+  if (/^(\d)\1+$/.test(p)) return 'errPinWeak';
+  if ('01234567890123'.includes(p) || '98765432109876'.includes(p)) return 'errPinWeak';
+  if (COMMON_PINS.has(p)) return 'errPinWeak';
+  // Motifs répétés : 121212, 123123, 112233…
+  if (/^(\d\d)\1+$/.test(p) || /^(\d\d\d)\1+$/.test(p) || /^(\d)\1(\d)\2(\d)\3$/.test(p)) return 'errPinWeak';
+  return null;
+}
+
+export function validatePinRecord(r) {
+  if (!isObj(r) || r.v !== 1) throw new FormatError('pin');
+  if (!Number.isInteger(r.len) || r.len < 6 || r.len > 12) throw new FormatError('pin.len');
+  if (!Number.isInteger(r.iterations) || r.iterations < 100000 || r.iterations > 10000000) throw new FormatError('pin.kdf');
+  checkLen(r.salt, SALT_LEN);
+  checkLen(r.iv, IV_LEN);
+  checkLen(r.wrapped, WRAPPED_LEN);
+}
+
+// Crée le verrou PIN. Il faut la phrase secrète (pour prouver qu'on est le propriétaire).
+export async function makePinRecord(meta, passphrase, pin) {
+  const dek = await unlockWithPassphrase(meta, passphrase, true);
+  const salt = randomBytes(SALT_LEN);
+  const kek = await deriveKek(String(pin), salt, meta.kdf.iterations);
+  const w = await wrapWith(dek, kek, salt, AAD_PIN);
+  return { v: 1, len: String(pin).length, iterations: meta.kdf.iterations, ...w };
+}
+
+export async function unlockWithPin(record, pin) {
+  validatePinRecord(record);
+  const kek = await deriveKek(String(pin), fromB64(record.salt), record.iterations);
+  return unwrapWith(record, kek, AAD_PIN, false);
+}
+
 // ---------- Données ----------
 
 export async function encryptData(key, obj) {

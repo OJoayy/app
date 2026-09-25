@@ -1,5 +1,5 @@
 // app.js — le "chef d'orchestre" : écrans, verrouillage, sauvegardes.
-// v0.3 : coffre-fort (étape 1) + comptes, pools et opérations (étape 2).
+// v0.4 : coffre-fort, comptes/pools/opérations, code PIN, bouton retour.
 
 import * as C from './crypto.js';
 import * as S from './store.js';
@@ -7,7 +7,8 @@ import { t, setLang, getLang, applyI18n } from './i18n.js';
 import * as L from './ledger.js';
 import * as screens from './screens.js';
 
-const APP_VERSION = '0.3';
+const APP_VERSION = '0.4';
+const PASS_EVERY_MS = 7 * 86400000; // la phrase est redemandée tous les 7 jours
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
 const BACKUP_WARN_DAYS = 7;
@@ -23,7 +24,7 @@ const $ = (id) => document.getElementById(id);
 // ---------- État ----------
 // session = null quand le coffre est verrouillé.
 let session = null; // { key, meta, data }
-let prefs = { lang: 'fr', lockMinutes: 3, failures: 0, retryAt: 0 };
+let prefs = { lang: 'fr', lockMinutes: 3 };
 let lastActivity = Date.now();
 let suppressLockUntil = 0; // pendant le choix d'un fichier ou un partage
 let pending = null; // nouveau coffre (création ou changement de phrase) en attente de la clé de secours
@@ -46,8 +47,57 @@ function show(id) {
     b.classList.toggle('active', b.dataset.tab === id);
     if (b.dataset.tab === id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   }
+  syncHistory(id);
   window.scrollTo(0, 0);
 }
+
+// ---------- Bouton retour d'Android ----------
+// Hors des écrans "racine", on ajoute une étape dans l'historique du
+// navigateur. Le bouton retour la consomme : on revient en arrière dans
+// l'app au lieu de la fermer.
+const ROOT_SCREENS = new Set(['s-home', 's-lock', 's-welcome', 's-loading']);
+let backGuard = false;
+let ignorePops = 0;
+
+function syncHistory(id) {
+  if (!ROOT_SCREENS.has(id)) {
+    if (!backGuard) { history.pushState({ sika: 1 }, ''); backGuard = true; }
+  } else if (backGuard) {
+    backGuard = false;
+    ignorePops += 1;
+    history.back();
+  }
+}
+
+function currentScreen() {
+  const s = document.querySelector('.screen:not([hidden])');
+  return s ? s.id : 's-loading';
+}
+
+window.addEventListener('popstate', () => {
+  if (ignorePops > 0) { ignorePops -= 1; return; }
+  backGuard = false;
+  const cur = currentScreen();
+  if (isBusy() || !$('modal').hidden) {
+    if (!$('modal').hidden && askCancel) askCancel();
+    syncHistory(cur); // on reste sur place
+    return;
+  }
+  switch (cur) {
+    case 's-create': show('s-welcome'); break;
+    case 's-recover': goLock(); break;
+    case 's-import': $('btn-import-back').onclick(); break;
+    case 's-reckey': syncHistory(cur); break; // on reste : la clé doit être notée
+    case 's-tx':
+    case 's-account':
+      screens.back().then((left) => { if (!left) syncHistory(currentScreen()); });
+      break;
+    case 's-accounts':
+    case 's-history':
+    case 's-settings': screens.openTab('s-home'); break;
+    default: break; // écran racine : le prochain retour ferme l'app
+  }
+});
 
 function setMsg(id, text) {
   $(id).textContent = text || '';
@@ -82,9 +132,6 @@ function sanitizePrefs(p) {
   const out = {};
   if (p && (p.lang === 'fr' || p.lang === 'en')) out.lang = p.lang;
   if (p && [1, 3, 5].includes(p.lockMinutes)) out.lockMinutes = p.lockMinutes;
-  if (p && Number.isInteger(p.failures) && p.failures >= 0) out.failures = p.failures;
-  // Si l'horloge du téléphone a sauté, l'attente ne dépasse jamais 5 min.
-  if (p && Number.isFinite(p.retryAt) && p.retryAt >= 0) out.retryAt = Math.min(p.retryAt, Date.now() + MAX_DELAY_S * 1000);
   return out;
 }
 
@@ -165,7 +212,7 @@ function lock() {
   pendingImport = null;
   // Effacer ce qui est affiché. (JavaScript ne permet pas d'effacer la
   // mémoire elle-même : on retire les références, le navigateur libère.)
-  clearInputs('lock-pass', 'cp-old', 'cp-new', 'cp-new2', 'reckey-verify',
+  clearInputs('lock-pass', 'lock-pin', 'pin-pass', 'pin-new', 'pin-new2', 'cp-old', 'cp-new', 'cp-new2', 'reckey-verify',
     'import-secret', 'import-pass', 'import-pass2', 'recover-key', 'recover-pass', 'recover-pass2');
   $('reckey-groups').replaceChildren();
   $('import-file').value = '';
@@ -173,39 +220,203 @@ function lock() {
   $('modal').hidden = true;
   $('modal-text').textContent = '';
   hideSecrets();
-  for (const id of ['export-msg', 'cp-msg', 'import-msg', 'home-msg']) setMsg(id, '');
+  for (const id of ['export-msg', 'cp-msg', 'import-msg', 'home-msg', 'pin-msg']) setMsg(id, '');
   screens.clearAll();
   $('tabbar').hidden = true;
   goLock();
 }
 
-async function goLock() {
+async function goLock(forcePass = false, note = '') {
   const meta = await S.get('meta');
   if (!meta) { show('s-welcome'); return; }
+  await loadGuard();
+  await setLockMode(forcePass, note);
   show('s-lock');
   updateCountdown();
+  const field = lockMode === 'pin' ? $('lock-pin') : $('lock-pass');
+  if (document.visibilityState === 'visible') field.focus();
 }
 
-function registerFailure() {
-  prefs.failures += 1;
-  const delay = Math.min(2 ** (prefs.failures - 1), MAX_DELAY_S);
-  prefs.retryAt = Date.now() + delay * 1000;
-  return savePrefs();
+// ---------- Compteur d'essais (partagé entre onglets) ----------
+// Stocké à part ('guard'), toujours lu ET écrit dans une seule transaction.
+// Chaque essai est compté comme raté AVANT le calcul lent : ouvrir un
+// 2e onglet, recharger ou couper l'app ne donne donc aucun essai gratuit.
+const MAX_PIN_UNLOCKS = 30; // ouvertures au PIN avant de redemander la phrase
+let guard = { failures: 0, retryAt: 0, pinFailures: 0, lastPassAt: 0, pinUnlocks: 0 };
+
+function cleanGuard(g) {
+  const n = (x) => (Number.isFinite(x) && x >= 0 ? x : 0);
+  const out = { failures: n(g && g.failures), retryAt: n(g && g.retryAt), pinFailures: n(g && g.pinFailures),
+    lastPassAt: n(g && g.lastPassAt), pinUnlocks: n(g && g.pinUnlocks) };
+  // Horloge du téléphone reculée ou avancée : l'attente ne dépasse jamais 5 min.
+  out.retryAt = Math.min(out.retryAt, Date.now() + MAX_DELAY_S * 1000);
+  return out;
 }
 
-function resetFailures() {
-  prefs.failures = 0;
-  prefs.retryAt = 0;
-  return savePrefs();
+async function loadGuard() {
+  guard = cleanGuard(await S.get('guard'));
+  return guard;
+}
+
+// Un seul essai à la fois, même avec plusieurs onglets ouverts.
+function withAttemptLock(fn) {
+  if (navigator.locks && navigator.locks.request) return navigator.locks.request('sika-unlock', fn);
+  return fn();
+}
+
+// Renvoie true si l'essai peut avoir lieu (et le compte déjà comme raté).
+async function beginAttempt(kind) {
+  let allowed = false;
+  guard = cleanGuard(await S.update('guard', (g0) => {
+    const g = cleanGuard(g0);
+    const now = Date.now();
+    if (now < g.retryAt) return g;
+    if (kind === 'pin' && g.pinFailures >= C.PIN_MAX_TRIES) return g;
+    allowed = true;
+    g.failures += 1;
+    g.retryAt = now + Math.min(2 ** (g.failures - 1), MAX_DELAY_S) * 1000;
+    if (kind === 'pin') g.pinFailures += 1;
+    return g;
+  }));
+  return allowed;
+}
+
+// L'essai a réussi : on efface l'attente. 'pass' = phrase ou clé de secours.
+async function attemptSucceeded(kind) {
+  guard = cleanGuard(await S.update('guard', (g0) => {
+    const g = cleanGuard(g0);
+    g.failures = 0;
+    g.retryAt = 0;
+    g.pinFailures = 0;
+    if (kind === 'pin') g.pinUnlocks += 1;
+    else { g.lastPassAt = Date.now(); g.pinUnlocks = 0; }
+    return g;
+  }));
+}
+
+// ---------- Code PIN ----------
+let lockMode = 'pass';
+let pinLen = 0;
+
+// 'ok' = le PIN peut servir ; 'expired' = phrase exigée ; 'none' = pas de PIN.
+async function pinState() {
+  const rec = await S.get('pin');
+  if (!rec) return { state: 'none' };
+  try { C.validatePinRecord(rec); } catch { await S.del('pin'); return { state: 'none' }; }
+  await loadGuard();
+  if (guard.pinFailures >= C.PIN_MAX_TRIES) { await S.del('pin'); return { state: 'none' }; }
+  const now = Date.now();
+  // Phrase exigée : après 7 jours, si l'horloge a reculé, ou après 30 ouvertures au PIN.
+  if (now - guard.lastPassAt > PASS_EVERY_MS || now < guard.lastPassAt || guard.pinUnlocks >= MAX_PIN_UNLOCKS) {
+    return { state: 'expired', rec };
+  }
+  return { state: 'ok', rec };
+}
+
+async function setLockMode(forcePass = false, note = '') {
+  const { state, rec } = await pinState();
+  lockMode = state === 'ok' && !forcePass ? 'pin' : 'pass';
+  pinLen = rec ? rec.len : 0;
+  clearInputs('lock-pin');
+  $('lock-pin-wrap').hidden = lockMode !== 'pin';
+  $('lock-pass-wrap').hidden = lockMode !== 'pass';
+  $('btn-use-pin').hidden = !(lockMode === 'pass' && state === 'ok');
+  $('lock-info').textContent = note || (state === 'expired' ? t('pinExpired') : '');
+}
+
+async function onUnlockPin() {
+  if (isBusy()) return;
+  const pin = $('lock-pin').value;
+  if (!pin) return;
+  const startEpoch = epoch;
+  let failed = false;
+  let disabled = false;
+  let expired = false;
+  busy(true);
+  try {
+    await withAttemptLock(async () => {
+      const { state, rec } = await pinState();
+      if (state !== 'ok') { expired = true; return; }
+      if (!(await beginAttempt('pin'))) { failed = true; return; }
+      const meta = await S.get('meta');
+      let key;
+      try {
+        key = await C.unlockWithPin(rec, pin);
+      } catch (e) {
+        if (!(e instanceof C.WrongSecretError)) throw e;
+        failed = true;
+        if (guard.pinFailures >= C.PIN_MAX_TRIES) { await S.del('pin'); disabled = true; }
+        return;
+      }
+      let data;
+      try {
+        data = validateData(await C.decryptData(key, await S.get('data')));
+      } catch (e) {
+        // Le PIN ne correspond plus à ce coffre : on l'efface, la phrase décidera.
+        if (e instanceof C.DataError) { await S.del('pin'); disabled = true; return; }
+        throw e;
+      }
+      await attemptSucceeded('pin');
+      setMsg('lock-msg', '');
+      openSession(key, meta, data, startEpoch);
+    });
+  } catch (e) {
+    setMsg('lock-msg', isDataProblem(e) ? t('errDataDamaged') : t('errGeneric'));
+  } finally {
+    clearInputs('lock-pin');
+    busy(false);
+    if (disabled) await goLock(true, t('pinDisabled'));
+    else if (expired) await goLock(true);
+    else if (failed) updateCountdown();
+  }
+}
+
+async function onPinSave() {
+  if (isBusy() || !session) return;
+  $('pin-msg').className = 'error';
+  const pin = $('pin-new').value;
+  const err = C.checkPin(pin);
+  if (err) return setMsg('pin-msg', t(err));
+  if (pin !== $('pin-new2').value) return setMsg('pin-msg', t('errPinMismatch'));
+  const s = session;
+  busy(true);
+  try {
+    const rec = await C.makePinRecord(s.meta, $('pin-pass').value, pin);
+    if (session !== s) return; // verrouillé entre-temps
+    await S.put('pin', rec);
+    await attemptSucceeded('pass'); // la phrase vient d'être prouvée
+    clearInputs('pin-pass', 'pin-new', 'pin-new2');
+    $('pin-msg').className = 'ok';
+    setMsg('pin-msg', t('pinSaved'));
+    await renderPinStatus();
+  } catch (e) {
+    setMsg('pin-msg', e instanceof C.WrongSecretError ? t('wrongCurrentPass') : t('errGeneric'));
+  } finally {
+    busy(false);
+  }
+}
+
+async function onPinRemove() {
+  if (isBusy() || !session) return;
+  await S.del('pin');
+  $('pin-msg').className = 'ok';
+  setMsg('pin-msg', t('pinRemoved'));
+  await renderPinStatus();
+}
+
+async function renderPinStatus() {
+  const has = Boolean(await S.get('pin'));
+  $('pin-status').textContent = has ? t('pinOn') : t('pinOff');
+  $('btn-pin-remove').hidden = !has;
 }
 
 // Bloque les boutons Ouvrir tant que l'attente n'est pas finie.
 function updateCountdown() {
   clearInterval(countdownTimer);
-  const buttons = [$('btn-unlock'), $('btn-recover')];
+  const buttons = [$('btn-unlock'), $('btn-unlock-pin'), $('btn-recover')];
   const tick = () => {
     if (isBusy()) return;
-    const left = Math.ceil((prefs.retryAt - Date.now()) / 1000);
+    const left = Math.ceil((guard.retryAt - Date.now()) / 1000);
     if (left > 0) {
       for (const b of buttons) b.disabled = true;
       const msg = t('wrongSecret') + ' ' + t('waitSeconds', { s: left });
@@ -214,7 +425,7 @@ function updateCountdown() {
     } else {
       clearInterval(countdownTimer);
       for (const b of buttons) b.disabled = false;
-      const msg = prefs.failures > 0 ? t('wrongSecret') : '';
+      const msg = guard.failures > 0 ? t('wrongSecret') : '';
       setMsg('lock-msg', msg);
       setMsg('recover-err', msg);
     }
@@ -276,6 +487,7 @@ async function renderSettings() {
     try { status = (await navigator.storage.persisted()) ? t('storagePersisted') : t('storageNotPersisted'); } catch { /* inconnu */ }
   }
   $('storage-status').textContent = status;
+  await renderPinStatus();
 }
 
 function renderLangChips() {
@@ -345,8 +557,9 @@ async function onRecKeyDone() {
   try {
     const box = await C.encryptData(p.key, p.data);
     if (startEpoch !== epoch || pending !== p) return; // verrouillé entre-temps : rien n'est écrit
-    await S.putMany([['meta', p.meta], ['data', box]]);
-    await resetFailures();
+    // Nouvelle clé : l'ancien PIN ne sert plus (effacé dans la même transaction).
+    await S.putMany([['meta', p.meta], ['data', box]], p.kind === 'rotate' ? ['pin'] : []);
+    await attemptSucceeded('pass');
     pending = null;
     $('reckey-groups').replaceChildren();
     clearInputs('reckey-verify');
@@ -366,26 +579,30 @@ async function onRecKeyDone() {
 
 async function onUnlock() {
   if (isBusy()) return;
-  if (Date.now() < prefs.retryAt) return updateCountdown();
   const pass = $('lock-pass').value;
   if (!pass) return;
   const startEpoch = epoch;
   let failed = false;
   busy(true);
   try {
-    const meta = await S.get('meta');
-    const key = await C.unlockWithPassphrase(meta, pass);
-    await resetFailures();
-    const data = validateData(await C.decryptData(key, await S.get('data')));
-    clearInputs('lock-pass');
-    hideSecrets();
-    setMsg('lock-msg', '');
-    openSession(key, meta, data, startEpoch);
+    await withAttemptLock(async () => {
+      if (!(await beginAttempt('pass'))) { failed = true; return; }
+      const meta = await S.get('meta');
+      let key;
+      try { key = await C.unlockWithPassphrase(meta, pass); } catch (e) {
+        if (e instanceof C.WrongSecretError) { failed = true; return; }
+        throw e;
+      }
+      await attemptSucceeded('pass');
+      const data = validateData(await C.decryptData(key, await S.get('data')));
+      hideSecrets();
+      setMsg('lock-msg', '');
+      openSession(key, meta, data, startEpoch);
+    });
   } catch (e) {
-    if (e instanceof C.WrongSecretError) { await registerFailure(); clearInputs('lock-pass'); failed = true; }
-    else if (isDataProblem(e)) setMsg('lock-msg', t('errDataDamaged'));
-    else setMsg('lock-msg', t('errGeneric'));
+    setMsg('lock-msg', isDataProblem(e) ? t('errDataDamaged') : t('errGeneric'));
   } finally {
+    clearInputs('lock-pass');
     busy(false);
     if (failed) updateCountdown();
   }
@@ -393,7 +610,6 @@ async function onUnlock() {
 
 async function onRecover() {
   if (isBusy()) return;
-  if (Date.now() < prefs.retryAt) return updateCountdown();
   const p1 = $('recover-pass').value;
   const p2 = $('recover-pass2').value;
   const err = C.checkPassphrase(p1);
@@ -403,18 +619,25 @@ async function onRecover() {
   let failed = false;
   busy(true);
   try {
-    const oldMeta = await S.get('meta');
-    const { meta, key } = await C.recoverAndReset(oldMeta, $('recover-key').value, p1);
-    await resetFailures();
-    const data = validateData(await C.decryptData(key, await S.get('data')));
-    await S.put('meta', meta);
-    clearInputs('recover-key', 'recover-pass', 'recover-pass2');
-    hideSecrets();
-    openSession(key, meta, data, startEpoch);
+    await withAttemptLock(async () => {
+      if (!(await beginAttempt('pass'))) { failed = true; return; }
+      const oldMeta = await S.get('meta');
+      let meta;
+      let key;
+      try { ({ meta, key } = await C.recoverAndReset(oldMeta, $('recover-key').value, p1)); } catch (e) {
+        if (e instanceof C.WrongSecretError) { failed = true; return; }
+        throw e;
+      }
+      await attemptSucceeded('pass');
+      const data = validateData(await C.decryptData(key, await S.get('data')));
+      // Nouvelle phrase : l'ancien PIN est retiré aussi (même transaction).
+      await S.putMany([['meta', meta]], ['pin']);
+      clearInputs('recover-key', 'recover-pass', 'recover-pass2');
+      hideSecrets();
+      openSession(key, meta, data, startEpoch);
+    });
   } catch (e) {
-    if (e instanceof C.WrongSecretError) { await registerFailure(); failed = true; }
-    else if (isDataProblem(e)) setMsg('recover-err', t('errDataDamaged'));
-    else setMsg('recover-err', t('errGeneric'));
+    setMsg('recover-err', isDataProblem(e) ? t('errDataDamaged') : t('errGeneric'));
   } finally {
     busy(false);
     if (failed) updateCountdown();
@@ -571,8 +794,9 @@ async function onImport() {
     const startEpoch = epoch;
     if (pendingImport !== imp) return; // verrouillé pendant la question
     busy(true);
-    await S.putMany([['meta', meta], ['data', imp.data]]);
-    await resetFailures();
+    // Le PIN n'est jamais dans une sauvegarde : on retire l'ancien (même transaction).
+    await S.putMany([['meta', meta], ['data', imp.data]], ['pin']);
+    await attemptSucceeded('pass');
     pendingImport = null;
     clearInputs('import-secret', 'import-pass', 'import-pass2');
     hideSecrets();
@@ -650,7 +874,7 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.3//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.4//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,
@@ -682,8 +906,9 @@ async function onWipe() {
   busy(true);
   try {
     await S.clearAll();
-    prefs = { lang: prefs.lang, lockMinutes: prefs.lockMinutes, failures: 0, retryAt: 0 };
+    prefs = { lang: prefs.lang, lockMinutes: prefs.lockMinutes };
     await savePrefs();
+    await loadGuard();
     lock();
   } finally {
     busy(false);
@@ -709,6 +934,18 @@ function wire() {
 
   $('btn-unlock').onclick = onUnlock;
   onEnter('lock-pass', onUnlock);
+  $('btn-unlock-pin').onclick = onUnlockPin;
+  onEnter('lock-pin', onUnlockPin);
+  // Ouverture automatique dès que le code a la bonne longueur.
+  $('lock-pin').addEventListener('input', () => {
+    const v = $('lock-pin').value;
+    if (!/^\d*$/.test(v)) $('lock-pin').value = v.replace(/\D/g, '');
+    if (pinLen && $('lock-pin').value.length === pinLen) onUnlockPin();
+  });
+  $('btn-use-pass').onclick = () => goLock(true);
+  $('btn-use-pin').onclick = () => goLock(false);
+  $('btn-pin-save').onclick = onPinSave;
+  $('btn-pin-remove').onclick = onPinRemove;
   $('btn-go-recover').onclick = () => { setMsg('recover-err', ''); show('s-recover'); updateCountdown(); };
   $('btn-recover').onclick = onRecover;
   $('btn-lock-restore').onclick = goImport;
@@ -776,8 +1013,9 @@ async function init() {
     show,
     ask,
     isBusy,
-    renderSettings: () => { $('cp-msg').textContent = ''; return renderSettings(); },
+    renderSettings: () => { $('cp-msg').textContent = ''; $('pin-msg').textContent = ''; return renderSettings(); },
     renderHomeExtras,
+    suppressLock: (on) => { suppressLockUntil = on ? Date.now() + 120000 : 0; },
   });
   registerServiceWorker();
   await goLock();

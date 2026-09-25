@@ -39,8 +39,22 @@ export const put = (key, value) => run('readwrite', (s) => s.put(value, key));
 export const del = (key) => run('readwrite', (s) => s.delete(key));
 export const clearAll = () => run('readwrite', (s) => s.clear());
 
+// Lit puis réécrit une clé dans UNE seule transaction : deux onglets
+// ouverts en même temps ne peuvent pas s'écraser l'un l'autre.
+export const update = (key, fn) => run('readwrite', (s) => {
+  const out = { result: undefined };
+  const req = s.get(key);
+  req.onsuccess = () => {
+    out.result = fn(req.result);
+    s.put(out.result, key);
+  };
+  return out;
+});
+
 // Écrit plusieurs clés d'un coup : tout passe, ou rien ne passe.
-export const putMany = (entries) => run('readwrite', (s) => {
+// "removeKeys" : clés à effacer dans la même transaction.
+export const putMany = (entries, removeKeys = []) => run('readwrite', (s) => {
   for (const [k, v] of entries) s.put(v, k);
+  for (const k of removeKeys) s.delete(k);
   return null;
 });

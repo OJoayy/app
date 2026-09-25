@@ -1,8 +1,8 @@
-# SIKA — v0.3 (étapes 1 et 2)
+# SIKA — v0.4
 
 - **Étape 1 :** le coffre-fort (chiffrement, phrase secrète, clé de secours, sauvegarde).
-- **Étape 2 (nouveau) :** comptes, pools, revenus, dépenses, transferts, Go/No-Go.
-- **Nouveau look :** police Figtree, boutons ronds, nom en majuscules.
+- **Étape 2 :** comptes, pools, revenus, dépenses, transferts, Go/No-Go.
+- **Nouveau en v0.4 :** code PIN, images de compte, bouton retour d'Android, look plus compact.
 
 **Règle : n'entre que des données fictives jusqu'à la fin de l'étape 7.**
 
@@ -27,7 +27,7 @@
 2. Clique **+** (en haut à droite) → **New repository**.
 3. Nom du dépôt : `app`. Visibilité : **Public**. Coche **Add a README file**. Clique **Create repository**.
 4. Dans le dépôt : **Add file** → **Upload files**.
-5. Décompresse le fichier `sika-v0.3.zip` sur l'ordinateur. Ouvre le dossier `sika`, sélectionne **tout ce qu'il contient** (pas le dossier lui-même) et glisse-le dans la page GitHub. Les dossiers `css`, `js` et `icons` doivent apparaître.
+5. Décompresse le fichier `sika-v0.4.zip` sur l'ordinateur. Ouvre le dossier `sika`, sélectionne **tout ce qu'il contient** (pas le dossier lui-même) et glisse-le dans la page GitHub. Les dossiers `css`, `js` et `icons` doivent apparaître.
 6. En bas, clique **Commit changes**.
 7. Va dans **Settings** → **Pages**. Sous « Build and deployment » : Source = **Deploy from a branch**, Branch = **main**, dossier **/ (root)**. Clique **Save**.
 8. Attends 1 à 3 minutes. L'adresse de l'app s'affiche en haut de la page Pages : `https://[COMPTE].github.io/app/`.
@@ -89,6 +89,23 @@ Envoie-moi les résultats des tests 8, 9 et 10, et tout ce qui a cloché. Ne m'e
 | 10 | Réglages → sauvegarde → Effacer → Restaurer | Comptes et opérations reviennent à l'identique |
 
 Envoie-moi seulement ce qui ne se passe pas comme prévu.
+
+## 5 ter. Le code PIN (v0.4)
+
+- **À quoi il sert :** ouvrir vite. Réglages → Code PIN (il faut ta phrase pour le créer).
+- **Règles :** 6 à 12 chiffres ; les codes trop simples (123456, 111111, 121212…) sont refusés.
+- **5 erreurs** (tous onglets confondus) : le PIN est effacé, la phrase est demandée.
+- **La phrase est redemandée** tous les 7 jours, après 30 ouvertures au PIN, et si l'horloge du téléphone recule.
+- **Jamais dans une sauvegarde.** Après une restauration, un changement de phrase ou l'usage de la clé de secours, recrée ton PIN.
+- **Limite honnête :** quelqu'un qui copie la mémoire du téléphone avec des outils spéciaux (téléphone déverrouillé, rooté ou en mode débogage) peut essayer tous les PIN à 6 chiffres en moins d'une heure. Garde donc le **verrouillage d'écran d'Android** actif et le téléphone à jour. Sans PIN, seule la phrase protège, et c'est plus fort.
+
+| # | Test | Résultat attendu |
+| --- | --- | --- |
+| 1 | Réglages → Code PIN : ta phrase + un code, 2 fois | « Code PIN enregistré » |
+| 2 | Verrouiller (cadenas en haut) | L'écran demande le PIN ; l'app s'ouvre dès le dernier chiffre |
+| 3 | 5 mauvais codes | Le PIN est désactivé, la phrase est demandée |
+| 4 | Dans un formulaire, touche le bouton retour d'Android | Retour à l'écran d'avant, pas de sortie de l'app. Si tu as tapé quelque chose, l'app demande avant d'effacer |
+| 5 | Comptes → un compte → Choisir une image | L'image remplace la lettre du compte |
 
 ## 6. Ce qu'il faut savoir sur les sauvegardes
 

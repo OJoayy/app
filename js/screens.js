@@ -16,6 +16,9 @@ let txMood = null;
 let txSource = 'client';
 let accEditing = null;    // compte en cours de modification (ou null)
 let accCategory = 'mobile';
+let accIcon = null;       // image du compte en cours de modification
+let imageToken = 0;       // ignore une image arrivée après la fermeture du formulaire
+let formSnapshot = '';    // état du formulaire à l'ouverture (pour savoir s'il a changé)
 let histFilter = 'all';
 let histLimit = 200; // l'historique s'affiche par paquets de 200
 
@@ -43,6 +46,39 @@ function todayStr(d = new Date()) {
 const poolName = (id) => t('pool' + id);
 const moodOf = (id) => L.MOODS.find((m) => m.id === id);
 const accountName = (data, id) => (data.accounts.find((a) => a.id === id) || {}).name || '?';
+
+// Pastille du compte : son image, sinon sa première lettre sur une couleur.
+function avatar(name, category, icon, cls = '') {
+  if (icon && L.isIcon(icon)) {
+    const img = el('img', 'avatar ' + cls);
+    img.alt = '';
+    img.src = icon;
+    return img;
+  }
+  const letter = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  const span = el('span', `avatar letter cat-${category} ${cls}`, letter);
+  span.setAttribute('aria-hidden', 'true');
+  return span;
+}
+
+// Réduit une photo à 96 × 96 et la ré-encode (retire aussi ses infos cachées).
+async function imageToIcon(file) {
+  if (!file || !/^image\/(png|jpeg|webp|gif|heic|heif|avif)$/.test(file.type) || file.size > 15 * 1024 * 1024) throw new Error('image');
+  // Décodage directement en petit (évite de charger une photo géante en mémoire).
+  const bmp = await createImageBitmap(file, { resizeWidth: 256, resizeQuality: 'medium' });
+  const size = 96;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext('2d');
+  const side = Math.min(bmp.width, bmp.height);
+  g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+  bmp.close();
+  let url = canvas.toDataURL('image/webp', 0.85);
+  if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
+  if (!L.isIcon(url)) throw new Error('image');
+  return url;
+}
 
 // ---------- Lignes d'opérations ----------
 
@@ -140,7 +176,9 @@ export function renderAccounts() {
 function accountRow(a, balance) {
   const row = el('button', 'acc-row');
   row.type = 'button';
-  row.append(el('span', 'tx-title', a.name), el('span', 'amt' + (balance < 0 ? ' negtxt' : ''), money(balance)));
+  const name = el('span', 'acc-name');
+  name.append(avatar(a.name, a.category, a.icon), el('span', 'tx-title', a.name));
+  row.append(name, el('span', 'amt' + (balance < 0 ? ' negtxt' : ''), money(balance)));
   row.onclick = () => openAccountForm(a);
   return row;
 }
@@ -236,6 +274,7 @@ export function openTxForm(type, tx = null) {
   $('btn-tx-delete').hidden = !tx;
   updateTxChecks();
   ctx.show('s-tx');
+  formSnapshot = snapshot();
   if (!tx) $('tx-amount').focus();
 }
 
@@ -342,7 +381,28 @@ async function onTxDelete() {
 
 function renderCatChips() {
   renderChips($('acc-cats'), L.CATEGORIES.map((c) => ({ id: c, label: t('cat_' + c) })), accCategory,
-    (id) => { accCategory = id; renderCatChips(); });
+    (id) => { accCategory = id; renderCatChips(); renderAccAvatar(); });
+}
+
+function renderAccAvatar() {
+  const slot = $('acc-avatar');
+  const a = avatar($('acc-name').value, accCategory, accIcon, 'lg');
+  a.id = 'acc-avatar';
+  slot.replaceWith(a);
+  $('btn-acc-image-remove').hidden = !accIcon;
+}
+
+async function onAccImagePicked() {
+  ctx.suppressLock(false);
+  const file = $('acc-image-file').files[0];
+  $('acc-image-file').value = '';
+  if (!file) return;
+  const token = ++imageToken;
+  let icon = null;
+  try { icon = await imageToIcon(file); } catch { icon = null; }
+  if (token !== imageToken || $('s-account').hidden) return; // formulaire fermé entre-temps
+  if (icon) { accIcon = icon; $('acc-err').textContent = ''; } else $('acc-err').textContent = t('errImage');
+  renderAccAvatar();
 }
 
 export function openAccountForm(a = null) {
@@ -359,8 +419,12 @@ export function openAccountForm(a = null) {
   cur.hidden = !a;
   if (a) cur.textContent = t('accCurrent', { x: money(L.computeBalances(ctx.data()).accounts.get(a.id)) });
   accCategory = a ? a.category : 'mobile';
+  accIcon = a && a.icon ? a.icon : null;
+  imageToken += 1;
   renderCatChips();
+  renderAccAvatar();
   ctx.show('s-account');
+  formSnapshot = snapshot();
   if (!a) $('acc-name').focus();
 }
 
@@ -378,6 +442,7 @@ async function onAccountSave() {
     clean = L.cleanAccount({
       id: accEditing ? accEditing.id : L.newId(), name, category: accCategory, start,
       splitStart: $('acc-split').checked, archived: accEditing ? $('acc-archived').checked : false,
+      icon: accIcon || undefined,
     });
   } catch { return err('errGeneric'); }
   if (accEditing) {
@@ -428,6 +493,30 @@ export function isTab(id) {
   return TABS.includes(id);
 }
 
+// Valeurs actuelles du formulaire ouvert, pour détecter une saisie en cours.
+function snapshot() {
+  const ids = $('s-tx').hidden
+    ? ['acc-name', 'acc-start', 'acc-split', 'acc-archived']
+    : ['tx-amount', 'tx-desc', 'tx-from', 'tx-to', 'tx-pool', 'tx-date', 'tx-reason'];
+  const vals = ids.map((id) => ($(id).type === 'checkbox' ? $(id).checked : $(id).value));
+  return JSON.stringify([vals, txMood, txSource, accCategory, accIcon]);
+}
+
+// Bouton retour sur un formulaire : comme "Annuler", mais on demande
+// avant de perdre une saisie. Renvoie true si le formulaire est fermé.
+export async function back() {
+  if (snapshot() !== formSnapshot) {
+    const data = ctx.data();
+    if (!(await ctx.ask(t('discardConfirm')))) return false;
+    if (ctx.data() !== data) return true; // verrouillé pendant la question
+  }
+  editing = null;
+  accEditing = null;
+  imageToken += 1;
+  goBack();
+  return true;
+}
+
 // Au verrouillage : effacer tout ce qui montre de l'argent.
 export function clearAll() {
   for (const id of ['home-total', 'home-pools-note', 'acc-total']) $(id).textContent = '';
@@ -438,6 +527,9 @@ export function clearAll() {
   for (const id of ['tx-nogo', 'tx-acc-warn']) $(id).textContent = '';
   editing = null;
   accEditing = null;
+  accIcon = null;
+  const av = $('acc-avatar');
+  if (av.tagName === 'IMG') av.removeAttribute('src');
 }
 
 // Réaffiche les textes après un changement de langue.
@@ -474,4 +566,9 @@ export function initScreens(context) {
   $('btn-tx-cancel').onclick = () => { editing = null; goBack(); };
   $('btn-acc-save').onclick = onAccountSave;
   $('btn-acc-cancel').onclick = () => { accEditing = null; goBack(); };
+  $('btn-acc-image').onclick = () => { ctx.suppressLock(true); $('acc-image-file').click(); };
+  $('acc-image-file').addEventListener('change', onAccImagePicked);
+  $('acc-image-file').addEventListener('cancel', () => ctx.suppressLock(false));
+  $('btn-acc-image-remove').onclick = () => { accIcon = null; renderAccAvatar(); };
+  $('acc-name').addEventListener('input', () => { if (!accIcon) renderAccAvatar(); });
 }

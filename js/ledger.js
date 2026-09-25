@@ -131,16 +131,26 @@ const isDate = (x) => typeof x === 'string' && ISO_RE.test(x) && !Number.isNaN(D
 
 function fail(msg) { throw new DataShapeError(msg); }
 
+// Image de compte : petite image (PNG, JPEG ou WebP) encodée en texte, 40 Ko max.
+const ICON_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+export const MAX_ICON_CHARS = 40_000;
+export const isIcon = (x) => typeof x === 'string' && x.length <= MAX_ICON_CHARS && ICON_RE.test(x);
+
 // Vérifie un compte. Renvoie une copie propre (champs connus seulement).
 export function cleanAccount(a) {
   if (!isObj(a) || !isId(a.id)) fail('account.id');
   if (!isStr(a.name, LIMITS.name) || !a.name.trim()) fail('account.name');
   if (!CATEGORIES.includes(a.category)) fail('account.category');
   if (!Number.isInteger(a.start) || a.start < 0 || a.start > MAX_AMOUNT) fail('account.start');
-  return {
+  const out = {
     id: a.id, name: a.name.trim(), category: a.category, start: a.start,
     splitStart: a.splitStart === true, archived: a.archived === true,
   };
+  if (a.icon !== undefined && a.icon !== null) {
+    if (!isIcon(a.icon)) fail('account.icon');
+    out.icon = a.icon;
+  }
+  return out;
 }
 
 // Vérifie une opération par rapport aux comptes connus.
