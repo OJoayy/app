@@ -1,10 +1,11 @@
-# SIKA — v0.6
+# SIKA — v0.7
 
 - **Étape 1 :** le coffre-fort (chiffrement, phrase secrète, clé de secours, sauvegarde).
 - **Étape 2 :** comptes, pools, revenus, dépenses, transferts, Go/No-Go.
 - **v0.4 :** code PIN, images de compte, bouton retour d'Android, look plus compact.
 - **v0.5 (étape 3) :** solde en FCFA, £ et €, mode discret (œil), bouton + flottant, PIN à 7 chiffres en cases rondes, œil dans les champs secrets.
 - **Nouveau en v0.6 (étapes 4 et 5) :** gestionnaire de dettes et gestionnaire d'investissements. Mode discret en étoiles, seulement sur le solde principal.
+- **Nouveau en v0.7 :** bouton + réorganisé (Dépense et Revenu côte à côte en bas), mode discret aussi sur les dettes, flèche des dates alignée, « Solde des pools » sur la page Comptes.
 - **Réglages (v0.6) :** ils ne sont plus dans la barre du bas. Touche l'icône en haut à gauche du Dashboard.
 
 **Règle : n'entre que des données fictives jusqu'à la fin de l'étape 7.**
@@ -115,13 +116,13 @@ Envoie-moi seulement ce qui ne se passe pas comme prévu.
 - **£ et € :** le FCFA est fixé à l'euro (1 € = 655,957 FCFA). Le taux € → £ vient de la Banque centrale européenne, via le service gratuit Frankfurter, une fois par jour au plus, et seulement quand le coffre est ouvert.
 - **Ce que cette demande révèle :** aucune donnée financière. Comme toute connexion, elle montre au service l'adresse IP du téléphone, l'adresse du site et l'heure. Tu peux la couper : Réglages → « Taux £ en ligne ».
 - **Hors ligne :** l'app garde le dernier taux. Après 7 jours, une petite ligne « Taux £ ancien » apparaît sous le solde.
-- **Mode discret (v0.6) :** l'œil remplace le solde principal par des étoiles (•••). La valeur nette aussi, car elle permettrait de retrouver le solde par calcul. Tous les autres montants restent visibles.
+- **Mode discret (v0.7) :** un seul réglage, deux boutons œil (Dashboard et Dettes). Passent en étoiles (•••) : le solde principal, les dettes et la valeur nette du Dashboard, le total et le reste à payer des dettes, et le solde de chaque dette dans la liste. Tout le reste reste visible, y compris la fiche détaillée d'une dette.
 
 | # | Test | Résultat attendu |
 | --- | --- | --- |
 | 1 | Ouvre le Dashboard avec internet | Sous le solde : « … £ · … € » |
 | 2 | Touche l'œil de la carte du solde | Le solde devient « •••••• FCFA » ; le reste de l'app ne change pas |
-| 3 | Touche le bouton + rond | Revenu, Dépense, Transfert apparaissent ; le bouton retour ferme le menu |
+| 3 | Touche le bouton + rond (avec 2 comptes ou plus) | En bas : Dépense et Revenu côte à côte. Au-dessus de Revenu : Transfert, puis Remboursement et Investir. Le bouton retour ferme le menu |
 | 4 | Réglages → Créer un code PIN → 7 chiffres → « Afficher les chiffres » | Les chiffres apparaissent dans les cases ; après Enregistrer, le formulaire se referme |
 | 5 | Verrouille, puis tape le PIN | 7 cases rondes ; l'app s'ouvre au 7e chiffre |
 

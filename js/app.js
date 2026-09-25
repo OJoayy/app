@@ -11,7 +11,7 @@ import * as W from './widgets.js';
 import * as FX from './fx.js';
 import * as F from './finance.js';
 
-const APP_VERSION = '0.6';
+const APP_VERSION = '0.7';
 const PASS_EVERY_MS = 7 * 86400000; // la phrase est redemandée tous les 7 jours
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
@@ -531,10 +531,12 @@ window.addEventListener('pagehide', () => { epoch += 1; if (session) lock(); });
 
 // ---------- Mode discret et taux de change ----------
 
-// Mode discret : seul le solde principal est remplacé par des étoiles.
+// Mode discret : étoiles sur les grands totaux (solde, dettes, valeur nette),
+// jamais sur le détail des opérations.
 function applyDiscreet() {
   if (session && !$('s-home').hidden) screens.renderHome();
-  else screens.refreshDiscreet();
+  else if (session && !$('s-debts').hidden) F.renderDebts();
+  screens.refreshDiscreet();
 }
 
 // Taux € -> £ du jour, au plus toutes les 12 h, seulement coffre ouvert.
@@ -972,7 +974,7 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.6//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.7//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,

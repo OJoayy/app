@@ -529,9 +529,11 @@ export function toggleFab(open) {
 
 export function refreshDiscreet() {
   const on = ctx.isDiscreet();
-  const btn = $('btn-discreet');
-  btn.replaceChildren(W.eyeIcon(!on));
-  btn.setAttribute('aria-pressed', String(on));
+  for (const id of ['btn-discreet', 'btn-debts-discreet']) {
+    const btn = $(id);
+    btn.replaceChildren(W.eyeIcon(!on));
+    btn.setAttribute('aria-pressed', String(on));
+  }
 }
 
 // Valeurs actuelles du formulaire ouvert, pour détecter une saisie en cours.
@@ -606,6 +608,7 @@ export function initScreens(context) {
   $('fab-repay').onclick = () => { toggleFab(false); F.openRepay(); };
   $('fab-buy').onclick = () => { toggleFab(false); F.openBuy(); };
   $('btn-discreet').onclick = () => ctx.toggleDiscreet();
+  $('btn-debts-discreet').onclick = () => ctx.toggleDiscreet();
   $('btn-home-add-account').onclick = () => openAccountForm();
   $('btn-add-account').onclick = () => openAccountForm();
 

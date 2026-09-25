@@ -95,9 +95,10 @@ export function renderHomeFinance(b) {
   $('home-worth').hidden = !show;
   if (show) {
     $('worth-assets').textContent = money(assets);
-    $('worth-debts').textContent = (owed > 0 ? '−' : '') + money(owed);
+    const hide = ctx.isDiscreet();
+    $('worth-debts').textContent = hide ? '•••••• FCFA' : (owed > 0 ? '−' : '') + money(owed);
     // Mode discret : la valeur nette permettrait de retrouver le solde caché.
-    $('worth-net').textContent = ctx.isDiscreet() ? '•••••• FCFA' : money(b.liquid + assets - owed);
+    $('worth-net').textContent = hide ? '•••••• FCFA' : money(b.liquid + assets - owed);
     $('worth-assets').parentElement.hidden = data.assets.length === 0;
     $('worth-debts').parentElement.hidden = data.debts.length === 0;
   }
@@ -123,8 +124,10 @@ export function renderDebts() {
     late += st.lateCount;
     if (st.next && (!next || st.next.date < next.row.date)) next = { row: st.next, d };
   }
-  $('debts-total').textContent = money(total);
-  $('debts-topay').textContent = t('toPayNote', { x: money(toPay) });
+  // Mode discret : le total des dettes et le reste à payer passent en étoiles.
+  const hide = ctx.isDiscreet();
+  $('debts-total').textContent = hide ? '•••••• FCFA' : money(total);
+  $('debts-topay').textContent = t('toPayNote', { x: hide ? '•••••• FCFA' : money(toPay) });
   $('debts-next').textContent = next ? t(next.row.late ? 'dueLateNote' : 'nextDueNote', { date: fmtYmd(next.row.date), x: money(next.row.amount), name: next.d.lender }) : '';
   $('debts-late').hidden = late === 0;
   $('debts-late').textContent = t('lateBanner', { n: late });
@@ -147,7 +150,8 @@ function debtRow(d, st) {
     : st.next ? t('nextShort', { date: fmtYmd(st.next.date, false) }) : '';
   mid.append(el('span', 'tx-title', d.lender), el('span', 'tx-meta' + (st.lateCount ? ' nogo-note' : ''), meta));
   name.append(avatar(d.lender, 'bank'), mid);
-  row.append(name, el('span', 'amt', money(st.balance)));
+  // Mode discret : les soldes de la liste aussi (leur somme donnerait le total caché).
+  row.append(name, el('span', 'amt', ctx.isDiscreet() && !st.done ? '•••••• FCFA' : money(st.balance)));
   row.onclick = () => openDebt(d.id);
   return row;
 }
@@ -272,7 +276,7 @@ function onDebtIcs() {
   if (!d) return;
   const st = D.debtStatus(d, data);
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.6//FR', 'CALSCALE:GREGORIAN'];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.7//FR', 'CALSCALE:GREGORIAN'];
   for (const r of st.schedule) {
     if (r.paid || r.date < D.todayYmd()) continue;
     const day = r.date.replace(/-/g, '');

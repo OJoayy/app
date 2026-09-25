@@ -136,7 +136,6 @@
     <div id="home-backup-warn" class="banner warn" role="status" hidden></div>
     <div class="card total">
       <button type="button" id="btn-discreet" class="eye-btn" data-i18n-aria="discreetToggle"></button>
-      <p class="muted" data-i18n="liquidTitle"></p>
       <p id="home-total" class="big money"></p>
       <p id="home-fx" class="fx money"></p>
       <p id="home-fx-stale" class="muted small-note" hidden></p>
@@ -167,7 +166,6 @@
   <section id="s-accounts" class="screen tabbed" hidden>
     <h1 data-i18n="accountsTitle"></h1>
     <div class="card total">
-      <p class="muted" data-i18n="liquidTitle"></p>
       <p id="acc-total" class="big money"></p>
       <p id="acc-pools-note" class="muted"></p>
       <button type="button" id="btn-add-account" class="secondary" data-i18n="addAccount"></button>
@@ -272,6 +270,7 @@
   <section id="s-debts" class="screen tabbed" hidden>
     <h1 data-i18n="debtsTitle"></h1>
     <div class="card total">
+      <button type="button" id="btn-debts-discreet" class="eye-btn" data-i18n-aria="discreetToggle"></button>
       <p class="muted" data-i18n="debtBalanceTitle"></p>
       <p id="debts-total" class="big"></p>
       <p id="debts-topay" class="muted"></p>
@@ -287,6 +286,7 @@
     <div id="strategy" class="card" hidden>
       <h2 data-i18n="strategyTitle"></h2>
       <div id="strategy-methods" class="row chips" role="group"></div>
+      <p class="muted small-note" data-i18n="strategyHelp"></p>
       <label><span data-i18n="strategyExtra"></span>
         <input id="strategy-extra" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
       </label>
@@ -589,11 +589,14 @@
   <!-- Bouton + flottant et son menu -->
   <div id="fab-backdrop" class="fab-backdrop" hidden></div>
   <div id="fab-menu" class="fab-menu" hidden>
-    <button type="button" id="fab-income" class="primary" data-i18n="newIncome"></button>
-    <button type="button" id="fab-expense" class="primary" data-i18n="newExpense"></button>
-    <button type="button" id="fab-transfer" class="primary" data-i18n="newTransfer"></button>
-    <button type="button" id="fab-repay" class="primary" data-i18n="newRepay"></button>
+    <!-- De haut en bas : les moins utilisés en haut, Dépense et Revenu sur la même ligne en bas. -->
     <button type="button" id="fab-buy" class="primary" data-i18n="newBuy"></button>
+    <button type="button" id="fab-repay" class="primary" data-i18n="newRepay"></button>
+    <button type="button" id="fab-transfer" class="primary" data-i18n="newTransfer"></button>
+    <div class="fab-row">
+      <button type="button" id="fab-expense" class="primary" data-i18n="newExpense"></button>
+      <button type="button" id="fab-income" class="primary" data-i18n="newIncome"></button>
+    </div>
   </div>
   <button type="button" id="fab" class="fab" data-i18n-aria="addTx" aria-expanded="false" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>

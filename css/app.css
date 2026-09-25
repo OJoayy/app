@@ -467,6 +467,8 @@ input.pin-hidden {
   z-index: 7;
 }
 .fab-menu button { width: auto; min-width: 140px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
+.fab-row { display: flex; gap: 8px; }
+.fab-row button { min-width: 120px; }
 body.has-tabs main { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
 
 /* Anciens codes longs (jusqu'à 12 chiffres) : cases plus petites. */
@@ -502,3 +504,32 @@ body.has-tabs main { padding-bottom: calc(140px + env(safe-area-inset-bottom)); 
 .avatar.cat-asset-stocks { background: #1565c0; }
 .avatar.cat-asset-crypto { background: #ef6c00; }
 .avatar.cat-asset-savings { background: #2e7d32; }
+
+/* v0.7 — date : même flèche que les listes, au même endroit. La vraie icône
+   du navigateur reste cliquable, mais invisible, posée sur notre flèche. */
+input[type="date"] {
+  position: relative;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6461' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  background-size: 16px;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 52px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-inner-spin-button, input[type="date"]::-webkit-clear-button { display: none; }
+
+/* Stratégie : les deux méthodes sur une seule ligne. */
+#strategy-methods { flex-wrap: nowrap; }
+#strategy-methods .chip { flex: 1 1 0; white-space: nowrap; }
