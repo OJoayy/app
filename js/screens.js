@@ -1,11 +1,14 @@
-// screens.js — les écrans de l'étape 2 : accueil, comptes et pools,
-// historique, formulaires (revenu, dépense, transfert, compte).
+// screens.js — les écrans : dashboard, comptes et pools, historique,
+// formulaires (revenu, dépense, transfert, remboursement, achat, vente, compte).
+// Les écrans Dettes et Investir sont dans finance.js.
 // Règle de sécurité : on n'écrit JAMAIS de HTML, seulement du texte.
 
 import * as L from './ledger.js';
 import { t, getLang } from './i18n.js';
 import * as FX from './fx.js';
 import * as W from './widgets.js';
+import * as F from './finance.js';
+import { el, money, fmtDay, todayStr, poolName, moodOf, accountName, avatar, imageToIcon, renderChips } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -16,6 +19,7 @@ let editing = null;       // opération en cours de modification (ou null)
 let txType = 'expense';
 let txMood = null;
 let txSource = 'client';
+let txPreset = {};        // valeurs proposées à l'ouverture (dette, actif, montant)
 let accEditing = null;    // compte en cours de modification (ou null)
 let accCategory = 'mobile';
 let accIcon = null;       // image du compte en cours de modification
@@ -23,64 +27,6 @@ let imageToken = 0;       // ignore une image arrivée après la fermeture du fo
 let formSnapshot = '';    // état du formulaire à l'ouverture (pour savoir s'il a changé)
 let histFilter = 'all';
 let histLimit = 200; // l'historique s'affiche par paquets de 200
-
-// ---------- Petits outils d'affichage ----------
-
-// Crée un élément avec du texte seulement (jamais de HTML).
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
-
-const money = (n) => `${L.formatAmount(n)} FCFA`;
-
-function fmtDay(iso) {
-  return new Date(iso).toLocaleDateString(getLang() === 'en' ? 'en-GB' : 'fr-FR', { day: 'numeric', month: 'short' });
-}
-
-function todayStr(d = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-const poolName = (id) => t('pool' + id);
-const moodOf = (id) => L.MOODS.find((m) => m.id === id);
-const accountName = (data, id) => (data.accounts.find((a) => a.id === id) || {}).name || '?';
-
-// Pastille du compte : son image, sinon sa première lettre sur une couleur.
-function avatar(name, category, icon, cls = '') {
-  if (icon && L.isIcon(icon)) {
-    const img = el('img', 'avatar ' + cls);
-    img.alt = '';
-    img.src = icon;
-    return img;
-  }
-  const letter = (name || '?').trim().charAt(0).toUpperCase() || '?';
-  const span = el('span', `avatar letter cat-${category} ${cls}`, letter);
-  span.setAttribute('aria-hidden', 'true');
-  return span;
-}
-
-// Réduit une photo à 96 × 96 et la ré-encode (retire aussi ses infos cachées).
-async function imageToIcon(file) {
-  if (!file || !/^image\/(png|jpeg|webp|gif|heic|heif|avif)$/.test(file.type) || file.size > 15 * 1024 * 1024) throw new Error('image');
-  // Décodage directement en petit (évite de charger une photo géante en mémoire).
-  const bmp = await createImageBitmap(file, { resizeWidth: 256, resizeQuality: 'medium' });
-  const size = 96;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const g = canvas.getContext('2d');
-  const side = Math.min(bmp.width, bmp.height);
-  g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
-  bmp.close();
-  let url = canvas.toDataURL('image/webp', 0.85);
-  if (!url.startsWith('data:image/webp')) url = canvas.toDataURL('image/png');
-  if (!L.isIcon(url)) throw new Error('image');
-  return url;
-}
 
 // ---------- Lignes d'opérations ----------
 
@@ -98,10 +44,30 @@ function txRow(data, tx) {
     amount = '−' + amount;
   } else if (tx.type === 'income') {
     icon = '＋';
-    title = tx.desc || t('source_' + tx.source);
-    meta = `${accountName(data, tx.to)} · ${fmtDay(tx.date)}`;
+    title = tx.desc || (tx.source === 'asset' ? F.assetName(data, tx.asset) : t('source_' + tx.source));
+    meta = `${accountName(data, tx.to)} · ${tx.source === 'asset' ? t('source_asset') + ' · ' : ''}${fmtDay(tx.date)}`;
     amount = '+' + amount;
     amountCls = 'amt in';
+  } else if (tx.type === 'loan') {
+    icon = '↘';
+    title = t('loanOf', { name: F.debtName(data, tx.debt) });
+    meta = `${accountName(data, tx.to)} · ${fmtDay(tx.date)}`;
+    amount = '+' + amount;
+  } else if (tx.type === 'repay') {
+    icon = '↗';
+    title = tx.desc || t('repayOf', { name: F.debtName(data, tx.debt) });
+    meta = `${accountName(data, tx.from)} · ${poolName('DET')} · ${fmtDay(tx.date)}`;
+    amount = '−' + amount;
+  } else if (tx.type === 'buy') {
+    icon = '◆';
+    title = tx.desc || t('buyOf', { name: F.assetName(data, tx.asset) });
+    meta = `${accountName(data, tx.from)} · ${poolName('INV')} · ${fmtDay(tx.date)}`;
+    amount = '−' + amount;
+  } else if (tx.type === 'sell') {
+    icon = '◇';
+    title = tx.desc || t('sellOf', { name: F.assetName(data, tx.asset), pct: (tx.shareBp / 100).toLocaleString(getLang() === 'en' ? 'en-GB' : 'fr-FR') });
+    meta = `${accountName(data, tx.to)} · ${poolName('INV')} · ${fmtDay(tx.date)}`;
+    amount = '+' + amount;
   } else {
     title = tx.desc || t('transferLabel');
     meta = `${accountName(data, tx.from)} → ${accountName(data, tx.to)} · ${fmtDay(tx.date)}`;
@@ -112,7 +78,8 @@ function txRow(data, tx) {
   mid.append(el('span', 'tx-title', title), el('span', 'tx-meta', meta));
   if (tx.reason) mid.append(el('span', 'tx-meta nogo-note', '⚠ ' + tx.reason));
   row.append(left, mid, el('span', amountCls, amount));
-  row.onclick = () => openTxForm(tx.type, tx);
+  // Un prêt reçu se modifie depuis sa dette.
+  row.onclick = () => (tx.type === 'loan' ? F.openDebt(tx.debt) : openTxForm(tx.type, tx));
   return row;
 }
 
@@ -127,19 +94,25 @@ function fillList(box, data, list, emptyKey) {
 export function renderHome() {
   const data = ctx.data();
   const b = L.computeBalances(data);
-  $('home-total').textContent = money(b.liquid);
   // Même solde en € et en £ (le € est fixe ; le £ dépend du taux du jour).
+  // Mode discret : seul le solde principal est remplacé par des étoiles.
   const lang = getLang();
-  const eur = FX.formatMoney(FX.toEur(b.liquid), 'EUR', lang);
   const fx = FX.cleanFx(data.fx);
-  $('home-fx').textContent = fx ? `≈ ${FX.formatMoney(FX.toGbp(b.liquid, fx), 'GBP', lang)} · ${eur}` : `≈ ${eur}`;
-  $('home-fx-note').textContent = !fx ? t('fxNone')
-    : FX.isStale(fx) ? t('fxStale', { date: fmtDay(fx.date + 'T12:00:00Z') })
-      : t('fxDate', { date: fmtDay(fx.date + 'T12:00:00Z') });
-  $('home-pools-note').textContent = t('poolsTotalNote', { x: money(b.poolTotal) });
+  if (ctx.isDiscreet()) {
+    $('home-total').textContent = '•••••• FCFA';
+    $('home-fx').textContent = fx ? '•••• £ · •••• €' : '•••• €';
+  } else {
+    $('home-total').textContent = money(b.liquid);
+    const eur = FX.formatMoney(FX.toEur(b.liquid), 'EUR', lang);
+    $('home-fx').textContent = fx ? `${FX.formatMoney(FX.toGbp(b.liquid, fx), 'GBP', lang)} · ${eur}` : eur;
+  }
+  // Le taux £ n'est signalé que s'il est ancien (plus de 7 jours).
+  $('home-fx-stale').hidden = !(fx && FX.isStale(fx));
+  $('home-fx-stale').textContent = fx && FX.isStale(fx) ? t('fxOldShort') : '';
   const noAccount = data.accounts.filter((a) => !a.archived).length === 0;
   $('home-empty').hidden = !noAccount;
   refreshDiscreet();
+  F.renderHomeFinance(b);
   fillList($('home-expenses'), data, L.sortedTx(data, (x) => x.type === 'expense').slice(0, 5), 'emptyExpenses');
   fillList($('home-incomes'), data, L.sortedTx(data, (x) => x.type === 'income').slice(0, 5), 'emptyIncomes');
   ctx.renderHomeExtras();
@@ -151,6 +124,7 @@ export function renderAccounts() {
   const data = ctx.data();
   const b = L.computeBalances(data);
   $('acc-total').textContent = money(b.liquid);
+  $('acc-pools-note').textContent = t('poolsTotalNote', { x: money(b.poolTotal) });
 
   const grid = $('pool-grid');
   grid.replaceChildren();
@@ -199,7 +173,8 @@ export function renderHistory() {
     c.classList.toggle('active', c.dataset.filter === histFilter);
     c.setAttribute('aria-pressed', String(c.dataset.filter === histFilter));
   }
-  const list = L.sortedTx(data, (x) => histFilter === 'all' || x.type === histFilter);
+  const list = L.sortedTx(data, (x) => histFilter === 'all' || x.type === histFilter
+    || (histFilter === 'other' && x.type !== 'income' && x.type !== 'expense'));
   fillList($('hist-list'), data, list.slice(0, histLimit), 'emptyHistory');
   $('btn-hist-more').hidden = list.length <= histLimit;
 }
@@ -212,23 +187,13 @@ function accountOptions(select, data, selectedId, excludeId) {
   for (const a of data.accounts) {
     if (a.archived && a.id !== selectedId) continue;
     if (a.id === excludeId) continue;
-    const o = el('option', null, ctx.isDiscreet() ? a.name : `${a.name} (${money(b.accounts.get(a.id))})`);
+    const o = el('option', null, `${a.name} (${money(b.accounts.get(a.id))})`);
     o.value = a.id;
     select.append(o);
   }
   if (selectedId) select.value = selectedId;
 }
 
-function renderChips(box, items, current, onPick) {
-  box.replaceChildren();
-  for (const it of items) {
-    const c = el('button', 'chip' + (it.id === current ? ' active' : ''), it.label);
-    c.type = 'button';
-    c.setAttribute('aria-pressed', String(it.id === current));
-    c.onclick = () => onPick(it.id);
-    box.append(c);
-  }
-}
 
 function renderMoodChips() {
   renderChips($('tx-moods'), L.MOODS.map((m) => ({ id: m.id, label: `${m.emoji} ${t('mood' + m.id)}` })), txMood,
@@ -237,16 +202,36 @@ function renderMoodChips() {
 
 function renderSourceChips() {
   renderChips($('tx-sources'), L.INCOME_SOURCES.map((s) => ({ id: s, label: t('source_' + s) })), txSource,
-    (id) => { txSource = id; renderSourceChips(); });
+    (id) => { txSource = id; renderSourceChips(); syncTxFields(); });
 }
 
-export function openTxForm(type, tx = null) {
+// Montre seulement les champs utiles pour ce type d'opération.
+function syncTxFields() {
+  const type = txType;
+  const outgoing = ['expense', 'transfer', 'repay', 'buy'].includes(type);
+  const incoming = ['income', 'transfer', 'sell'].includes(type);
+  $('tx-mood-wrap').hidden = type !== 'expense';
+  $('tx-pool-wrap').hidden = type !== 'expense';
+  $('tx-source-wrap').hidden = type !== 'income';
+  $('tx-from-wrap').hidden = !outgoing;
+  $('tx-to-wrap').hidden = !incoming;
+  $('tx-debt-wrap').hidden = type !== 'repay';
+  $('tx-asset-wrap').hidden = !(type === 'buy' || type === 'sell' || (type === 'income' && txSource === 'asset'));
+  $('tx-share-wrap').hidden = type !== 'sell';
+  $('tx-from-label').textContent = t(type === 'transfer' ? 'fromAccount' : 'account');
+  $('tx-to-label').textContent = t(type === 'transfer' ? 'toAccount' : 'account');
+  $('tx-amount-label').textContent = t(type === 'sell' ? 'amountReceived' : 'amountLabel');
+  updateTxChecks();
+}
+
+export function openTxForm(type, tx = null, preset = {}) {
   const data = ctx.data();
   editing = tx;
   txType = type;
+  txPreset = preset;
   returnTo = currentTab();
   $('tx-title').textContent = t((tx ? 'edit_' : 'new_') + type);
-  $('tx-amount').value = tx ? L.formatAmount(tx.amount) : '';
+  $('tx-amount').value = tx ? L.formatAmount(tx.amount) : preset.amount ? L.formatAmount(preset.amount) : '';
   $('tx-desc').value = tx ? tx.desc : '';
   $('tx-desc-label').textContent = t(type === 'expense' ? 'descExpense' : 'descOther');
   $('tx-date').value = tx ? todayStr(new Date(tx.date)) : todayStr();
@@ -254,16 +239,8 @@ export function openTxForm(type, tx = null) {
   $('tx-reason').value = tx && tx.reason ? tx.reason : '';
   $('tx-err').textContent = '';
 
-  $('tx-mood-wrap').hidden = type !== 'expense';
-  $('tx-pool-wrap').hidden = type !== 'expense';
-  $('tx-source-wrap').hidden = type !== 'income';
-  $('tx-from-wrap').hidden = type === 'income';
-  $('tx-to-wrap').hidden = type === 'expense';
-  $('tx-from-label').textContent = t(type === 'transfer' ? 'fromAccount' : 'account');
-  $('tx-to-label').textContent = t(type === 'transfer' ? 'toAccount' : 'account');
-
   txMood = tx && tx.mood ? tx.mood : null;
-  txSource = tx && tx.source ? tx.source : 'client';
+  txSource = tx && tx.source ? tx.source : preset.asset && type === 'income' ? 'asset' : 'client';
   renderMoodChips();
   renderSourceChips();
 
@@ -279,8 +256,12 @@ export function openTxForm(type, tx = null) {
     if (others.length) $('tx-to').value = others[0];
   }
 
+  F.debtOptions($('tx-debt'), data, tx ? tx.debt : preset.debt);
+  F.assetOptions($('tx-asset'), data, tx ? tx.asset : preset.asset);
+  $('tx-share').value = tx && tx.shareBp ? String(tx.shareBp / 100).replace('.', ',') : '100';
+
   $('btn-tx-delete').hidden = !tx;
-  updateTxChecks();
+  syncTxFields();
   ctx.show('s-tx');
   formSnapshot = snapshot();
   if (!tx) $('tx-amount').focus();
@@ -302,26 +283,24 @@ function updateTxChecks() {
     split.append(grid);
   }
 
+  // Go/No-Go : dépense (raison obligatoire) ; remboursement et achat (simple alerte).
   const nogo = $('tx-nogo');
-  const short = txType === 'expense' && amount ? L.poolShortfall(b, $('tx-pool').value, amount) : 0;
+  const poolId = txType === 'expense' ? $('tx-pool').value : txType === 'repay' ? 'DET' : txType === 'buy' ? 'INV' : null;
+  const short = poolId && amount ? L.poolShortfall(b, poolId, amount) : 0;
   nogo.hidden = short === 0;
-  $('tx-reason-wrap').hidden = short === 0;
+  $('tx-reason-wrap').hidden = !(short && txType === 'expense');
   if (short) {
-    const poolBal = b.pools[$('tx-pool').value];
-    // En mode discret, aucun montant dans les messages.
-    nogo.textContent = ctx.isDiscreet() ? t('nogoDiscreet', { pool: poolName($('tx-pool').value) })
-      : poolBal > 0 ? t('nogo', { pool: poolName($('tx-pool').value), x: money(short) })
-        : t('nogoEmpty', { pool: poolName($('tx-pool').value), bal: money(poolBal) });
+    const poolBal = b.pools[poolId];
+    nogo.textContent = poolBal > 0 ? t('nogo', { pool: poolName(poolId), x: money(short) })
+      : t('nogoEmpty', { pool: poolName(poolId), bal: money(poolBal) });
   }
 
   const warn = $('tx-acc-warn');
   const fromId = $('tx-from').value;
-  const low = txType !== 'income' && amount && fromId && b.accounts.get(fromId) < amount;
+  const outgoing = ['expense', 'transfer', 'repay', 'buy'].includes(txType);
+  const low = outgoing && amount && fromId && b.accounts.get(fromId) < amount;
   warn.hidden = !low;
-  if (low) {
-    warn.textContent = ctx.isDiscreet() ? t('accountLowDiscreet', { name: accountName(data, fromId) })
-      : t('accountLow', { name: accountName(data, fromId), x: money(b.accounts.get(fromId)) });
-  }
+  if (low) warn.textContent = t('accountLow', { name: accountName(data, fromId), x: money(b.accounts.get(fromId)) });
 }
 
 // Date choisie -> date ISO. Aujourd'hui = l'heure actuelle (garde l'ordre).
@@ -356,18 +335,35 @@ async function onTxSave() {
   } else if (txType === 'income') {
     tx.to = $('tx-to').value;
     tx.source = txSource;
+    if (txSource === 'asset') { tx.asset = $('tx-asset').value; if (!tx.asset) return err('errAsset'); }
+  } else if (txType === 'repay') {
+    tx.from = $('tx-from').value;
+    tx.debt = $('tx-debt').value;
+    if (!tx.debt) return err('errDebt');
+  } else if (txType === 'buy') {
+    tx.from = $('tx-from').value;
+    tx.asset = $('tx-asset').value;
+    if (!tx.asset) return err('errAsset');
+  } else if (txType === 'sell') {
+    tx.to = $('tx-to').value;
+    tx.asset = $('tx-asset').value;
+    if (!tx.asset) return err('errAsset');
+    const pct = Number($('tx-share').value.replace(',', '.').replace('%', '').trim());
+    if (!Number.isFinite(pct) || Math.round(pct * 100) < 1 || pct > 100) return err('errShare');
+    tx.shareBp = Math.round(pct * 100);
   } else {
     tx.from = $('tx-from').value;
     tx.to = $('tx-to').value;
     if (tx.from === tx.to) return err('errSameAccount');
   }
-  if (!tx.from && txType !== 'income') return err('errAccount');
-  if (!tx.to && txType !== 'expense') return err('errAccount');
+  if ('from' in tx && !tx.from) return err('errAccount');
+  if ('to' in tx && !tx.to) return err('errAccount');
 
   let clean;
-  try { clean = L.cleanTx(tx, new Set(data.accounts.map((a) => a.id))); } catch { return err('errGeneric'); }
+  try { clean = L.cleanTx(tx, L.refsOf(data)); } catch { return err('errGeneric'); }
   const before = data.tx.slice();
   const i = data.tx.findIndex((x) => x.id === clean.id);
+  if (i < 0 && data.tx.length >= L.LIMITS.tx) return err('errTooManyTx');
   if (i >= 0) data.tx[i] = clean; else data.tx.push(clean);
   if (!(await ctx.save())) { data.tx = before; return err('errGeneric'); }
   if (!ctx.data()) return; // verrouillé pendant l'enregistrement
@@ -379,7 +375,7 @@ async function onTxDelete() {
   if (!editing || ctx.isBusy()) return;
   const data = ctx.data();
   const target = editing;
-  if (!(await ctx.ask(ctx.isDiscreet() ? t('deleteConfirmDiscreet') : t('deleteConfirm', { x: money(target.amount) })))) return;
+  if (!(await ctx.ask(t('deleteConfirm', { x: money(target.amount) })))) return;
   if (ctx.data() !== data) return; // verrouillé pendant la question
   const before = data.tx.slice();
   data.tx = data.tx.filter((x) => x.id !== target.id);
@@ -482,14 +478,18 @@ async function onAccountSave() {
 
 // ---------- Navigation ----------
 
-const TABS = ['s-home', 's-accounts', 's-history', 's-settings'];
+const TABS = ['s-home', 's-accounts', 's-debts', 's-assets', 's-history', 's-settings'];
+
+// Écrans de détail (une dette, un actif) : on peut y revenir après un formulaire.
+const DETAILS = ['s-debt', 's-asset'];
 
 function currentTab() {
-  for (const id of TABS) if (!$(id).hidden) return id;
+  for (const id of [...TABS, ...DETAILS]) if (!$(id).hidden) return id;
   return returnTo;
 }
 
 function goBack() {
+  if (DETAILS.includes(returnTo) && F.reopenDetail(returnTo)) return;
   openTab(TABS.includes(returnTo) ? returnTo : 's-home');
 }
 
@@ -497,6 +497,8 @@ export function openTab(id) {
   if (id === 's-home') renderHome();
   if (id === 's-accounts') renderAccounts();
   if (id === 's-history') renderHistory();
+  if (id === 's-debts') F.renderDebts();
+  if (id === 's-assets') F.renderAssets();
   if (id === 's-settings') { ctx.renderSettings(); }
   ctx.show(id);
 }
@@ -515,6 +517,7 @@ export function toggleFab(open) {
     // Sans compte, le + ouvre directement la création d'un compte.
     if (!active) { toggleFab(false); openAccountForm(); return; }
     $('fab-transfer').hidden = active < 2;
+    $('fab-repay').hidden = !data.debts.some((d) => !F.isDebtDone(d, data));
   }
   $('fab-menu').hidden = !want;
   $('fab-backdrop').hidden = !want;
@@ -535,7 +538,7 @@ export function refreshDiscreet() {
 function snapshot() {
   const ids = $('s-tx').hidden
     ? ['acc-name', 'acc-start', 'acc-split', 'acc-archived']
-    : ['tx-amount', 'tx-desc', 'tx-from', 'tx-to', 'tx-pool', 'tx-date', 'tx-reason'];
+    : ['tx-amount', 'tx-desc', 'tx-from', 'tx-to', 'tx-pool', 'tx-date', 'tx-reason', 'tx-debt', 'tx-asset', 'tx-share'];
   const vals = ids.map((id) => ($(id).type === 'checkbox' ? $(id).checked : $(id).value));
   return JSON.stringify([vals, txMood, txSource, accCategory, accIcon]);
 }
@@ -557,7 +560,8 @@ export async function back() {
 
 // Au verrouillage : effacer tout ce qui montre de l'argent.
 export function clearAll() {
-  for (const id of ['home-total', 'home-fx', 'home-fx-note', 'home-pools-note', 'acc-total', 'acc-current']) $(id).textContent = '';
+  for (const id of ['home-total', 'home-fx', 'acc-pools-note', 'acc-total', 'acc-current']) $(id).textContent = '';
+  F.clearFinance();
   toggleFab(false);
   for (const id of ['home-expenses', 'home-incomes', 'pool-grid', 'acc-groups', 'hist-list', 'tx-split', 'tx-from', 'tx-to']) {
     $(id).replaceChildren();
@@ -599,12 +603,15 @@ export function initScreens(context) {
   $('fab-income').onclick = () => { toggleFab(false); openTxForm('income'); };
   $('fab-expense').onclick = () => { toggleFab(false); openTxForm('expense'); };
   $('fab-transfer').onclick = () => { toggleFab(false); openTxForm('transfer'); };
+  $('fab-repay').onclick = () => { toggleFab(false); F.openRepay(); };
+  $('fab-buy').onclick = () => { toggleFab(false); F.openBuy(); };
   $('btn-discreet').onclick = () => ctx.toggleDiscreet();
   $('btn-home-add-account').onclick = () => openAccountForm();
   $('btn-add-account').onclick = () => openAccountForm();
 
   for (const id of ['tx-amount', 'tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('input', updateTxChecks);
   for (const id of ['tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('change', updateTxChecks);
+  F.initFinance(ctx, { openTxForm, openTab, currentTab: () => currentTab(), setReturn: (id) => { returnTo = id; } });
   $('tx-amount').addEventListener('blur', () => prettyAmount($('tx-amount')));
   $('acc-start').addEventListener('blur', () => prettyAmount($('acc-start')));
   $('btn-tx-save').onclick = onTxSave;

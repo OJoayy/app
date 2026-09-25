@@ -4,7 +4,7 @@
 
 import { cleanFx } from './fx.js';
 
-export const DATA_SCHEMA = 2;
+export const DATA_SCHEMA = 3; // v3 : dettes et investissements
 // Garde-fous : 100 milliards FCFA par montant, 50 000 opérations.
 // Ainsi, même le plus grand total reste un nombre exact en JavaScript.
 export const MAX_AMOUNT = 100_000_000_000;
@@ -31,10 +31,14 @@ export const MOODS = [
 export const MOOD_IDS = MOODS.map((m) => m.id);
 
 export const CATEGORIES = ['mobile', 'cash', 'bank'];
-export const TX_TYPES = ['income', 'expense', 'transfer'];
-export const INCOME_SOURCES = ['client', 'other'];
+// income = revenu, expense = dépense, transfer = transfert,
+// loan = prêt reçu, repay = remboursement, buy = achat d'actif, sell = vente d'actif.
+export const TX_TYPES = ['income', 'expense', 'transfer', 'loan', 'repay', 'buy', 'sell'];
+export const INCOME_SOURCES = ['client', 'asset', 'other'];
+export const ASSET_CATEGORIES = ['land', 'stocks', 'crypto', 'savings'];
+export const DEBT_METHODS = ['avalanche', 'snowball'];
 
-const LIMITS = { name: 40, desc: 140, reason: 280, accounts: 50, tx: 50_000 };
+export const LIMITS = { name: 40, desc: 140, reason: 280, accounts: 50, tx: 50_000, debts: 50, assets: 100, rows: 600, values: 2000 };
 
 // ---------- Outils ----------
 
@@ -103,6 +107,19 @@ export function computeBalances(data, skipTxId = null) {
     } else if (tx.type === 'transfer') {
       accounts.set(tx.from, accounts.get(tx.from) - tx.amount);
       accounts.set(tx.to, accounts.get(tx.to) + tx.amount);
+    } else if (tx.type === 'loan') {
+      // Un prêt n'est PAS un revenu : l'argent entre, les pools ne bougent pas.
+      accounts.set(tx.to, accounts.get(tx.to) + tx.amount);
+    } else if (tx.type === 'repay') {
+      accounts.set(tx.from, accounts.get(tx.from) - tx.amount);
+      pools.DET -= tx.amount;
+    } else if (tx.type === 'buy') {
+      accounts.set(tx.from, accounts.get(tx.from) - tx.amount);
+      pools.INV -= tx.amount;
+    } else if (tx.type === 'sell') {
+      // L'argent d'une vente retourne dans le pool Investir (ce n'est pas un revenu).
+      accounts.set(tx.to, accounts.get(tx.to) + tx.amount);
+      pools.INV += tx.amount;
     }
   }
   let liquid = 0;
@@ -130,6 +147,9 @@ const isAmount = (x) => Number.isInteger(x) && x > 0 && x <= MAX_AMOUNT;
 // Dates : format ISO strict, en temps universel (comme toISOString()).
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 const isDate = (x) => typeof x === 'string' && ISO_RE.test(x) && !Number.isNaN(Date.parse(x));
+// Jour seul (AAAA-MM-JJ), vraie date du calendrier.
+export const isDay = (x) => typeof x === 'string' && /^(19|20|21)\d{2}-\d{2}-\d{2}$/.test(x)
+  && new Date(x + 'T00:00:00Z').toISOString().slice(0, 10) === x;
 
 function fail(msg) { throw new DataShapeError(msg); }
 
@@ -155,8 +175,12 @@ export function cleanAccount(a) {
   return out;
 }
 
-// Vérifie une opération par rapport aux comptes connus.
-export function cleanTx(t, accountIds) {
+// Vérifie une opération par rapport aux comptes, dettes et actifs connus.
+// refs = { accounts: Set, debts: Set, assets: Set }.
+export function cleanTx(t, refs) {
+  const accountIds = refs.accounts;
+  const debtIds = refs.debts || new Set();
+  const assetIds = refs.assets || new Set();
   if (!isObj(t) || !isId(t.id)) fail('tx.id');
   if (!TX_TYPES.includes(t.type)) fail('tx.type');
   if (!isAmount(t.amount)) fail('tx.amount');
@@ -166,10 +190,29 @@ export function cleanTx(t, accountIds) {
   const out = { id: t.id, type: t.type, amount: t.amount, date: new Date(t.date).toISOString(), desc: desc.trim() };
   const acc = (x) => { if (!accountIds.has(x)) fail('tx.account'); return x; };
 
+  const debt = (x) => { if (!debtIds.has(x)) fail('tx.debt'); return x; };
+  const asset = (x) => { if (!assetIds.has(x)) fail('tx.asset'); return x; };
+
   if (t.type === 'income') {
     out.to = acc(t.to);
     if (!INCOME_SOURCES.includes(t.source)) fail('tx.source');
     out.source = t.source;
+    if (t.source === 'asset') out.asset = asset(t.asset);
+  } else if (t.type === 'loan') {
+    out.to = acc(t.to);
+    out.debt = debt(t.debt);
+  } else if (t.type === 'repay') {
+    out.from = acc(t.from);
+    out.debt = debt(t.debt);
+  } else if (t.type === 'buy') {
+    out.from = acc(t.from);
+    out.asset = asset(t.asset);
+  } else if (t.type === 'sell') {
+    out.to = acc(t.to);
+    out.asset = asset(t.asset);
+    // Part vendue, en centièmes de % : 10000 = tout.
+    if (!Number.isInteger(t.shareBp) || t.shareBp < 1 || t.shareBp > 10000) fail('tx.share');
+    out.shareBp = t.shareBp;
   } else if (t.type === 'expense') {
     out.from = acc(t.from);
     if (!POOL_IDS.includes(t.pool)) fail('tx.pool');
@@ -187,10 +230,61 @@ export function cleanTx(t, accountIds) {
   return out;
 }
 
+// ---------- Dettes et actifs ----------
+
+// Une dette : ce que JE dois. Montants en FCFA, taux annuel en %.
+export function cleanDebt(d) {
+  if (!isObj(d) || !isId(d.id)) fail('debt.id');
+  if (!isStr(d.lender, LIMITS.name) || !d.lender.trim()) fail('debt.lender');
+  if (!isAmount(d.principal)) fail('debt.principal');
+  if (typeof d.rate !== 'number' || !Number.isFinite(d.rate) || d.rate < 0 || d.rate > 100) fail('debt.rate');
+  if (!Number.isInteger(d.months) || d.months < 1 || d.months > LIMITS.rows) fail('debt.months');
+  if (!isDay(d.start)) fail('debt.start');
+  if (d.mode !== 'auto' && d.mode !== 'manual') fail('debt.mode');
+  const out = {
+    id: d.id, lender: d.lender.trim(), principal: d.principal, rate: Math.round(d.rate * 100) / 100,
+    months: d.months, start: d.start, mode: d.mode, viaAccount: d.viaAccount === true,
+  };
+  if (d.mode === 'manual') {
+    if (!Array.isArray(d.rows) || d.rows.length < 1 || d.rows.length > LIMITS.rows) fail('debt.rows');
+    out.rows = d.rows.map((r) => {
+      if (!isObj(r) || !isDay(r.date) || !isAmount(r.amount)) fail('debt.row');
+      return { date: r.date, amount: r.amount };
+    }).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }
+  return out;
+}
+
+// Un actif : terrain, actions, crypto, épargne… Valeurs saisies à la main.
+export function cleanAsset(a) {
+  if (!isObj(a) || !isId(a.id)) fail('asset.id');
+  if (!isStr(a.name, LIMITS.name) || !a.name.trim()) fail('asset.name');
+  if (!ASSET_CATEGORIES.includes(a.category)) fail('asset.category');
+  if (!Number.isInteger(a.initialCost) || a.initialCost < 0 || a.initialCost > MAX_AMOUNT) fail('asset.cost');
+  if (!Array.isArray(a.values) || a.values.length > LIMITS.values) fail('asset.values');
+  const values = a.values.map((v) => {
+    if (!isObj(v) || !isDate(v.date) || !Number.isInteger(v.value) || v.value < 0 || v.value > MAX_AMOUNT) fail('asset.value');
+    return { date: new Date(v.date).toISOString(), value: v.value };
+  }).sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+  return { id: a.id, name: a.name.trim(), category: a.category, initialCost: a.initialCost, values, closed: a.closed === true };
+}
+
 // Données vides d'un nouveau coffre.
 export function newData() {
   const now = new Date().toISOString();
-  return { schema: DATA_SCHEMA, createdAt: now, updatedAt: now, lastBackupAt: null, fx: null, accounts: [], tx: [] };
+  return {
+    schema: DATA_SCHEMA, createdAt: now, updatedAt: now, lastBackupAt: null, fx: null,
+    debtMethod: 'avalanche', accounts: [], debts: [], assets: [], tx: [],
+  };
+}
+
+// Tous les liens connus (pour vérifier une opération).
+export function refsOf(data) {
+  return {
+    accounts: new Set(data.accounts.map((a) => a.id)),
+    debts: new Set(data.debts.map((d) => d.id)),
+    assets: new Set(data.assets.map((a) => a.id)),
+  };
 }
 
 // Vérifie tout le contenu déchiffré, et met à jour les anciennes versions.
@@ -200,15 +294,23 @@ export function migrateAndValidate(d) {
   if (d.schema === 1) {
     d = { schema: 2, createdAt: d.createdAt, updatedAt: d.updatedAt, lastBackupAt: d.lastBackupAt ?? null, accounts: [], tx: [] };
   }
+  // v2 -> v3 : on ajoute les dettes et les actifs (vides).
+  if (d.schema === 2) d = { ...d, schema: 3, debts: [], assets: [], debtMethod: 'avalanche' };
   if (d.schema !== DATA_SCHEMA) fail('schema');
+  if (!Array.isArray(d.debts) || d.debts.length > LIMITS.debts) fail('debts');
+  if (!Array.isArray(d.assets) || d.assets.length > LIMITS.assets) fail('assets');
   if (!Array.isArray(d.accounts) || d.accounts.length > LIMITS.accounts) fail('accounts');
   if (!Array.isArray(d.tx) || d.tx.length > LIMITS.tx) fail('tx');
   if (d.lastBackupAt !== null && d.lastBackupAt !== undefined && !isDate(d.lastBackupAt)) fail('lastBackupAt');
 
   const accounts = d.accounts.map(cleanAccount);
-  const ids = new Set(accounts.map((a) => a.id));
-  if (ids.size !== accounts.length) fail('account.duplicate');
-  const tx = d.tx.map((t) => cleanTx(t, ids));
+  const debts = d.debts.map(cleanDebt);
+  const assets = d.assets.map(cleanAsset);
+  const refs = refsOf({ accounts, debts, assets });
+  if (refs.accounts.size !== accounts.length) fail('account.duplicate');
+  if (refs.debts.size !== debts.length) fail('debt.duplicate');
+  if (refs.assets.size !== assets.length) fail('asset.duplicate');
+  const tx = d.tx.map((t) => cleanTx(t, refs));
   if (new Set(tx.map((t) => t.id)).size !== tx.length) fail('tx.duplicate');
 
   return {
@@ -217,7 +319,10 @@ export function migrateAndValidate(d) {
     updatedAt: isDate(d.updatedAt) ? d.updatedAt : new Date().toISOString(),
     lastBackupAt: d.lastBackupAt ?? null,
     fx: cleanFx(d.fx),
+    debtMethod: DEBT_METHODS.includes(d.debtMethod) ? d.debtMethod : 'avalanche',
     accounts,
+    debts,
+    assets,
     tx,
   };
 }

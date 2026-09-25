@@ -27,6 +27,7 @@
 
   <!-- Bienvenue (aucun coffre sur ce téléphone) -->
   <section id="s-welcome" class="screen" hidden>
+    <img class="brand-icon" src="icons/icon-192.png" alt="">
     <div class="brand" data-i18n="appName"></div>
     <p class="center-text muted" data-i18n="welcomeIntro"></p>
     <div class="row">
@@ -76,6 +77,7 @@
 
   <!-- Verrouillage -->
   <section id="s-lock" class="screen" hidden>
+    <img class="brand-icon" src="icons/icon-192.png" alt="">
     <div class="brand" data-i18n="appName"></div>
     <div id="lock-pin-wrap" class="stack" hidden>
       <p class="center-text lead" id="lock-pin-title" data-i18n="pinAsk"></p>
@@ -122,6 +124,9 @@
   <!-- Accueil (coffre ouvert) -->
   <section id="s-home" class="screen tabbed" hidden>
     <header class="brandbar">
+      <button type="button" id="btn-settings" class="icon-btn left" data-i18n-aria="settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9"/><circle cx="15" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/></svg>
+      </button>
       <div class="brand" data-i18n="appName"></div>
       <button type="button" id="btn-lock" class="icon-btn" data-i18n-aria="lockBtn">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
@@ -134,8 +139,13 @@
       <p class="muted" data-i18n="liquidTitle"></p>
       <p id="home-total" class="big money"></p>
       <p id="home-fx" class="fx money"></p>
-      <p id="home-fx-note" class="muted small-note"></p>
-      <p id="home-pools-note" class="muted money"></p>
+      <p id="home-fx-stale" class="muted small-note" hidden></p>
+    </div>
+    <div id="home-late" class="banner danger" role="status" hidden></div>
+    <div id="home-worth" class="card worth" hidden>
+      <div class="worth-row"><span data-i18n="worthAssets"></span><span id="worth-assets" class="amt"></span></div>
+      <div class="worth-row"><span data-i18n="worthDebts"></span><span id="worth-debts" class="amt"></span></div>
+      <div class="worth-row total"><span data-i18n="worthNet"></span><span id="worth-net" class="amt"></span></div>
     </div>
     <div id="home-empty" class="card" hidden>
       <h2 data-i18n="emptyTitle"></h2>
@@ -159,6 +169,7 @@
     <div class="card total">
       <p class="muted" data-i18n="liquidTitle"></p>
       <p id="acc-total" class="big money"></p>
+      <p id="acc-pools-note" class="muted"></p>
       <button type="button" id="btn-add-account" class="secondary" data-i18n="addAccount"></button>
     </div>
     <h2 data-i18n="poolsTitle"></h2>
@@ -174,7 +185,7 @@
       <button type="button" class="chip" data-filter="all" data-i18n="filterAll"></button>
       <button type="button" class="chip" data-filter="expense" data-i18n="filterExpense"></button>
       <button type="button" class="chip" data-filter="income" data-i18n="filterIncome"></button>
-      <button type="button" class="chip" data-filter="transfer" data-i18n="filterTransfer"></button>
+      <button type="button" class="chip" data-filter="other" data-i18n="filterOther"></button>
     </div>
     <div id="hist-list" class="list card"></div>
     <button type="button" id="btn-hist-more" class="secondary" data-i18n="showMore" hidden></button>
@@ -183,8 +194,17 @@
   <!-- Nouvelle opération / modifier -->
   <section id="s-tx" class="screen" hidden>
     <h1 id="tx-title"></h1>
-    <label><span data-i18n="amountLabel"></span>
+    <label><span id="tx-amount-label" data-i18n="amountLabel"></span>
       <input id="tx-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+    </label>
+    <label id="tx-debt-wrap" hidden><span data-i18n="debtLabel"></span>
+      <select id="tx-debt"></select>
+    </label>
+    <label id="tx-asset-wrap" hidden><span data-i18n="assetLabel"></span>
+      <select id="tx-asset"></select>
+    </label>
+    <label id="tx-share-wrap" hidden><span data-i18n="shareLabel"></span>
+      <input id="tx-share" type="text" inputmode="decimal" autocomplete="off" value="100">
     </label>
     <label id="tx-desc-wrap"><span id="tx-desc-label"></span>
       <input id="tx-desc" type="text" maxlength="140" autocomplete="off">
@@ -246,6 +266,185 @@
     <p id="acc-err" class="error" role="alert"></p>
     <button type="button" id="btn-acc-save" class="primary" data-i18n="save"></button>
     <button type="button" id="btn-acc-cancel" class="link" data-i18n="cancel"></button>
+  </section>
+
+  <!-- Dettes -->
+  <section id="s-debts" class="screen tabbed" hidden>
+    <h1 data-i18n="debtsTitle"></h1>
+    <div class="card total">
+      <p class="muted" data-i18n="debtBalanceTitle"></p>
+      <p id="debts-total" class="big"></p>
+      <p id="debts-topay" class="muted"></p>
+      <p id="debts-next" class="muted"></p>
+      <button type="button" id="btn-add-debt" class="secondary" data-i18n="addDebt"></button>
+    </div>
+    <div id="debts-late" class="banner danger" role="status" hidden></div>
+    <div id="debts-list" class="card list"></div>
+    <div id="debts-done-wrap" class="card list archived" hidden>
+      <h2 data-i18n="debtsDone"></h2>
+      <div id="debts-done"></div>
+    </div>
+    <div id="strategy" class="card" hidden>
+      <h2 data-i18n="strategyTitle"></h2>
+      <div id="strategy-methods" class="row chips" role="group"></div>
+      <label><span data-i18n="strategyExtra"></span>
+        <input id="strategy-extra" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+      </label>
+      <div id="strategy-result" class="split-grid"></div>
+      <p id="strategy-priority" class="muted"></p>
+      <div id="strategy-suggest" class="banner info" hidden></div>
+      <button type="button" id="btn-strategy-pay" class="secondary" hidden></button>
+    </div>
+  </section>
+
+  <!-- Une dette -->
+  <section id="s-debt" class="screen" hidden>
+    <h1 id="debt-title"></h1>
+    <div id="debt-late" class="banner danger" role="status" hidden></div>
+    <div class="card">
+      <div id="debt-stats" class="split-grid"></div>
+      <p id="debt-next" class="muted"></p>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-debt-repay" class="primary" data-i18n="repayBtn"></button>
+      <button type="button" id="btn-debt-ics" class="secondary" data-i18n="debtIcs"></button>
+    </div>
+    <div class="card">
+      <h2 data-i18n="scheduleTitle"></h2>
+      <div id="debt-schedule" class="list"></div>
+      <button type="button" id="btn-debt-more" class="link" data-i18n="showMore" hidden></button>
+    </div>
+    <div class="card">
+      <h2 data-i18n="repaymentsTitle"></h2>
+      <div id="debt-repays" class="list"></div>
+    </div>
+    <button type="button" id="btn-debt-edit" class="secondary" data-i18n="editDebt"></button>
+    <button type="button" id="btn-debt-back" class="link" data-i18n="back"></button>
+  </section>
+
+  <!-- Dette : créer / modifier -->
+  <section id="s-debt-form" class="screen" hidden>
+    <h1 id="debt-form-title"></h1>
+    <label><span data-i18n="lenderLabel"></span>
+      <input id="debt-lender" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <div id="debt-origin-wrap">
+      <p class="field-label" id="debt-origin-title" data-i18n="debtOriginLabel"></p>
+      <div id="debt-origins" class="row chips wrap" role="group" aria-labelledby="debt-origin-title"></div>
+    </div>
+    <label id="debt-account-wrap"><span data-i18n="debtAccountLabel"></span>
+      <select id="debt-account"></select>
+    </label>
+    <label><span id="debt-principal-label"></span>
+      <input id="debt-principal" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+    </label>
+    <div class="row">
+      <label><span data-i18n="rateLabel"></span>
+        <input id="debt-rate" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+      </label>
+      <label><span data-i18n="monthsLabel"></span>
+        <input id="debt-months" type="text" inputmode="numeric" autocomplete="off" placeholder="12">
+      </label>
+    </div>
+    <label><span id="debt-start-label"></span>
+      <input id="debt-start" type="date">
+    </label>
+    <p class="field-label" id="debt-mode-title" data-i18n="scheduleModeLabel"></p>
+    <div id="debt-modes" class="row chips wrap" role="group" aria-labelledby="debt-mode-title"></div>
+    <div id="debt-rows-wrap" class="stack" hidden>
+      <p class="muted" data-i18n="manualHelp"></p>
+      <div id="debt-rows" class="stack"></div>
+      <div class="row">
+        <button type="button" id="btn-debt-fill" class="secondary small" data-i18n="fillFromCalc"></button>
+        <button type="button" id="btn-debt-addrow" class="secondary small" data-i18n="addRow"></button>
+      </div>
+    </div>
+    <div id="debt-preview" class="banner info"></div>
+    <p id="debt-err" class="error" role="alert"></p>
+    <button type="button" id="btn-debt-save" class="primary" data-i18n="save"></button>
+    <button type="button" id="btn-debt-delete" class="danger" data-i18n="deleteDebt" hidden></button>
+    <button type="button" id="btn-debt-cancel" class="link" data-i18n="cancel"></button>
+  </section>
+
+  <!-- Investir -->
+  <section id="s-assets" class="screen tabbed" hidden>
+    <h1 data-i18n="assetsTitle"></h1>
+    <div class="card total">
+      <p class="muted" data-i18n="assetsValueTitle"></p>
+      <p id="assets-total" class="big"></p>
+      <p id="assets-gain" class="muted"></p>
+      <button type="button" id="btn-add-asset" class="secondary" data-i18n="addAsset"></button>
+    </div>
+    <div id="assets-groups" class="stack"></div>
+  </section>
+
+  <!-- Un actif -->
+  <section id="s-asset" class="screen" hidden>
+    <h1 id="asset-title"></h1>
+    <div class="card total">
+      <p id="asset-tags" class="muted"></p>
+      <p id="asset-value" class="big"></p>
+      <p id="asset-gain" class="muted"></p>
+      <div id="asset-spark"></div>
+    </div>
+    <div class="card">
+      <div id="asset-stats" class="split-grid"></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="updateValueTitle"></h2>
+      <label><span data-i18n="newValueLabel"></span>
+        <input id="asset-new-value" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+      </label>
+      <div id="asset-currencies" class="row chips" role="group"></div>
+      <p id="asset-value-msg" class="error" role="alert"></p>
+      <button type="button" id="btn-asset-value" class="secondary" data-i18n="save"></button>
+    </div>
+    <div class="row">
+      <button type="button" id="btn-asset-buy" class="primary" data-i18n="buyMore"></button>
+      <button type="button" id="btn-asset-sell" class="secondary" data-i18n="sellBtn"></button>
+    </div>
+    <button type="button" id="btn-asset-income" class="secondary" data-i18n="assetIncomeBtn"></button>
+    <div class="card">
+      <h2 data-i18n="assetHistoryTitle"></h2>
+      <div id="asset-events" class="list"></div>
+    </div>
+    <button type="button" id="btn-asset-edit" class="secondary" data-i18n="editAsset"></button>
+    <button type="button" id="btn-asset-back" class="link" data-i18n="back"></button>
+  </section>
+
+  <!-- Actif : créer / modifier -->
+  <section id="s-asset-form" class="screen" hidden>
+    <h1 id="asset-form-title"></h1>
+    <label><span data-i18n="assetNameLabel"></span>
+      <input id="asset-name" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <p class="field-label" id="asset-cat-title" data-i18n="accCategoryLabel"></p>
+    <div id="asset-cats" class="row chips wrap" role="group" aria-labelledby="asset-cat-title"></div>
+    <div id="asset-origin-wrap">
+      <p class="field-label" id="asset-origin-title" data-i18n="assetOriginLabel"></p>
+      <div id="asset-origins" class="row chips wrap" role="group" aria-labelledby="asset-origin-title"></div>
+    </div>
+    <div id="asset-buy-wrap" class="stack">
+      <label><span data-i18n="account"></span>
+        <select id="asset-account"></select>
+      </label>
+      <label><span data-i18n="buyAmountLabel"></span>
+        <input id="asset-buy-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+      </label>
+    </div>
+    <div id="asset-own-wrap" class="stack" hidden>
+      <label><span data-i18n="assetCostLabel"></span>
+        <input id="asset-cost" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+      </label>
+      <label><span data-i18n="assetValueNowLabel"></span>
+        <input id="asset-value-now" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+      </label>
+    </div>
+    <label class="check" id="asset-closed-wrap" hidden><input type="checkbox" id="asset-closed"> <span data-i18n="assetClosedLabel"></span></label>
+    <p id="asset-err" class="error" role="alert"></p>
+    <button type="button" id="btn-asset-save" class="primary" data-i18n="save"></button>
+    <button type="button" id="btn-asset-delete" class="danger" data-i18n="deleteAsset" hidden></button>
+    <button type="button" id="btn-asset-cancel" class="link" data-i18n="cancel"></button>
   </section>
 
   <!-- Réglages -->
@@ -393,6 +592,8 @@
     <button type="button" id="fab-income" class="primary" data-i18n="newIncome"></button>
     <button type="button" id="fab-expense" class="primary" data-i18n="newExpense"></button>
     <button type="button" id="fab-transfer" class="primary" data-i18n="newTransfer"></button>
+    <button type="button" id="fab-repay" class="primary" data-i18n="newRepay"></button>
+    <button type="button" id="fab-buy" class="primary" data-i18n="newBuy"></button>
   </div>
   <button type="button" id="fab" class="fab" data-i18n-aria="addTx" aria-expanded="false" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -401,20 +602,24 @@
   <!-- Barre d'onglets (coffre ouvert seulement) -->
   <nav id="tabbar" class="tabbar" hidden>
     <button type="button" data-tab="s-home">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5"/><path d="M6 9.5V20h12V9.5"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="9" rx="1.5"/><rect x="13" y="4" width="7" height="5" rx="1.5"/><rect x="13" y="11" width="7" height="9" rx="1.5"/><rect x="4" y="15" width="7" height="5" rx="1.5"/></svg>
       <span data-i18n="tabHome"></span>
     </button>
     <button type="button" data-tab="s-accounts">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="13" rx="2"/><path d="M3.5 10h17"/><path d="M15 14.5h2.5"/></svg>
       <span data-i18n="tabAccounts"></span>
     </button>
+    <button type="button" data-tab="s-debts">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2z"/><path d="M9 8.5h6M9 12h6"/></svg>
+      <span data-i18n="tabDebts"></span>
+    </button>
+    <button type="button" data-tab="s-assets">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-5 4 3 7-8"/><path d="M15 8h5v5"/></svg>
+      <span data-i18n="tabAssets"></span>
+    </button>
     <button type="button" data-tab="s-history">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
       <span data-i18n="tabHistory"></span>
-    </button>
-    <button type="button" data-tab="s-settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h9M17 7.5h3M4 16.5h3M11 16.5h9"/><circle cx="15" cy="7.5" r="2"/><circle cx="9" cy="16.5" r="2"/></svg>
-      <span data-i18n="tabSettings"></span>
     </button>
   </nav>
 </main>

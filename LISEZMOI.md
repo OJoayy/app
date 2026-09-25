@@ -1,9 +1,11 @@
-# SIKA — v0.5
+# SIKA — v0.6
 
 - **Étape 1 :** le coffre-fort (chiffrement, phrase secrète, clé de secours, sauvegarde).
 - **Étape 2 :** comptes, pools, revenus, dépenses, transferts, Go/No-Go.
 - **v0.4 :** code PIN, images de compte, bouton retour d'Android, look plus compact.
-- **Nouveau en v0.5 (étape 3) :** solde en FCFA, £ et €, mode discret (œil), bouton + flottant, PIN à 7 chiffres en cases rondes, œil dans les champs secrets.
+- **v0.5 (étape 3) :** solde en FCFA, £ et €, mode discret (œil), bouton + flottant, PIN à 7 chiffres en cases rondes, œil dans les champs secrets.
+- **Nouveau en v0.6 (étapes 4 et 5) :** gestionnaire de dettes et gestionnaire d'investissements. Mode discret en étoiles, seulement sur le solde principal.
+- **Réglages (v0.6) :** ils ne sont plus dans la barre du bas. Touche l'icône en haut à gauche du Dashboard.
 
 **Règle : n'entre que des données fictives jusqu'à la fin de l'étape 7.**
 
@@ -112,16 +114,66 @@ Envoie-moi seulement ce qui ne se passe pas comme prévu.
 
 - **£ et € :** le FCFA est fixé à l'euro (1 € = 655,957 FCFA). Le taux € → £ vient de la Banque centrale européenne, via le service gratuit Frankfurter, une fois par jour au plus, et seulement quand le coffre est ouvert.
 - **Ce que cette demande révèle :** aucune donnée financière. Comme toute connexion, elle montre au service l'adresse IP du téléphone, l'adresse du site et l'heure. Tu peux la couper : Réglages → « Taux £ en ligne ».
-- **Hors ligne :** l'app garde le dernier taux et affiche sa date. Après 7 jours, elle indique « taux ancien ».
-- **Mode discret :** l'œil sur la carte du solde floute tous les montants de l'app. Les messages d'alerte ne montrent alors plus de montant.
+- **Hors ligne :** l'app garde le dernier taux. Après 7 jours, une petite ligne « Taux £ ancien » apparaît sous le solde.
+- **Mode discret (v0.6) :** l'œil remplace le solde principal par des étoiles (•••). La valeur nette aussi, car elle permettrait de retrouver le solde par calcul. Tous les autres montants restent visibles.
 
 | # | Test | Résultat attendu |
 | --- | --- | --- |
-| 1 | Ouvre le Dashboard avec internet | Sous le solde : « ≈ … £ · … € » et « Taux BCE du … » |
-| 2 | Touche l'œil de la carte du solde | Tous les montants deviennent flous ; ils le restent après verrouillage |
+| 1 | Ouvre le Dashboard avec internet | Sous le solde : « … £ · … € » |
+| 2 | Touche l'œil de la carte du solde | Le solde devient « •••••• FCFA » ; le reste de l'app ne change pas |
 | 3 | Touche le bouton + rond | Revenu, Dépense, Transfert apparaissent ; le bouton retour ferme le menu |
 | 4 | Réglages → Créer un code PIN → 7 chiffres → « Afficher les chiffres » | Les chiffres apparaissent dans les cases ; après Enregistrer, le formulaire se referme |
 | 5 | Verrouille, puis tape le PIN | 7 cases rondes ; l'app s'ouvre au 7e chiffre |
+
+## 5 quinquies. Dettes (étape 4, v0.6)
+
+**Les mots :**
+
+- **Capital :** l'argent emprunté, sans les intérêts.
+- **Mensualité :** ce que tu paies chaque mois.
+- **Échéancier :** la liste des dates et des montants à payer.
+- **Avalanche :** rembourser d'abord la dette au taux le plus haut. C'est la méthode qui coûte le moins cher.
+- **Boule de neige :** rembourser d'abord la plus petite dette. C'est la méthode qui donne des victoires rapides.
+
+**Comment l'app calcule :**
+
+- **Échéancier calculé :** mensualité fixe, avec la formule classique des prêts bancaires. Exemple vérifié à la main : 1 000 000 FCFA à 12 % sur 12 mois donne 88 849 FCFA par mois.
+- **Échéancier recopié :** tu tapes les lignes de ton contrat. Le contrat fait foi : la dette est terminée quand toutes les lignes sont payées.
+- **Intérêts d'un remboursement :** comptés jour par jour depuis le paiement d'avant. C'est une **estimation**. Ta banque peut compter un peu autrement.
+- **Payer en avance** réduit les dernières échéances. **Payer en retard** ajoute des intérêts à la dernière.
+- **Un prêt reçu n'est pas un revenu :** l'argent arrive sur le compte, mais n'est pas réparti dans les pools.
+- **Un remboursement** sort du compte choisi et du pool Dette.
+
+**Les rappels :** le bouton « Rappels dans l'agenda » crée un fichier .ics avec toutes les échéances à venir. Chaque rappel sonne 3 jours avant. Le titre est neutre (« Échéance ») : pas de montant, pas de nom.
+
+| # | Test | Résultat attendu |
+| --- | --- | --- |
+| 1 | Dettes → Ajouter une dette → « Arrive sur un compte » → 1 000 000, 12 %, 12 mois | L'aperçu montre « Mensualité : 88 849 FCFA » ; après Enregistrer, le compte a 1 000 000 de plus |
+| 2 | Même test avec une date de prêt 70 jours avant aujourd'hui | Alerte rouge « 2 échéance(s) en retard », sur la fiche et sur le Dashboard |
+| 3 | Fiche de la dette → Rembourser → Enregistrer | Montant proposé = 88 849 ; il ne reste qu'1 échéance en retard |
+| 4 | Fiche de la dette → Rappels dans l'agenda | Le fichier s'ouvre dans l'agenda ; les rappels n'ont ni montant ni nom |
+| 5 | Ajoute une 2e dette « Dette déjà en cours » → « Recopié du contrat » → « Remplir avec le calcul » | Les lignes apparaissent ; tu peux les corriger une par une |
+| 6 | Stratégie → touche « Boule de neige » | « À rembourser en premier » passe à la plus petite dette |
+| 7 | Essaie de supprimer une dette qui a des remboursements | Refusé : il faut d'abord supprimer les remboursements |
+
+## 5 sexies. Investissements (étape 5, v0.6)
+
+- **Acheter :** l'argent sort du compte et du pool Invest. L'actif prend la valeur du prix payé.
+- **Mettre à jour la valeur :** à la main, en FCFA, € ou £. L'app convertit en FCFA.
+- **Vendre une part :** l'argent entre sur le compte et **revient dans le pool Invest**. L'app calcule le gain réalisé : prix de vente moins le coût de la part vendue.
+- **Revenu d'un investissement** (loyer, dividende, intérêts) : c'est un revenu normal, réparti dans les pools.
+- **Terrain :** sa valeur est toujours marquée « estimation ». Il n'a pas de prix de marché.
+- **Après 90 jours sans mise à jour**, l'app marque la valeur « à mettre à jour ».
+- **Valeur nette** (Dashboard) = argent sur les comptes + valeur des investissements − capital des dettes.
+
+| # | Test | Résultat attendu |
+| --- | --- | --- |
+| 1 | Investir → Ajouter → « Je l'achète maintenant » → 100 000 | L'actif vaut 100 000 ; le compte et le pool Invest baissent de 100 000 |
+| 2 | Nouvelle valeur 130 000 → Enregistrer | « Plus-value : +30 000 FCFA (+30 %) » ; le petit graphique monte |
+| 3 | Touche €, tape 200 → Enregistrer | Valeur : 131 191 FCFA |
+| 4 | Vendre → 50 % pour 70 000 | Gain réalisé +20 000 FCFA (car le coût de la moitié = 50 000) |
+| 5 | Ajoute un terrain « Je l'ai déjà » | Étiquette « estimation » |
+| 6 | Historique → filtre « Autres » | Prêt reçu, remboursement, achat, vente apparaissent |
 
 ## 6. Ce qu'il faut savoir sur les sauvegardes
 
@@ -158,6 +210,10 @@ Envoie-moi seulement ce qui ne se passe pas comme prévu.
 | `js/fx.js` | Conversions FCFA → € et £, taux du jour. |
 | `js/widgets.js` | L'œil des champs secrets et les cases rondes du PIN. |
 | `js/screens.js` | Les écrans de l'étape 2 : accueil, comptes, historique, formulaires. |
+| `js/debts.js` | Les calculs des dettes : mensualité, échéancier, retards, avalanche et boule de neige. |
+| `js/assets.js` | Les calculs des investissements : coût, valeur, plus-value, gain réalisé. |
+| `js/finance.js` | Les écrans Dettes et Investir. |
+| `js/ui.js` | Petits outils d'affichage partagés (montants, dates, petit graphique). |
 | `fonts/` | La police Figtree et sa licence (OFL). |
 | `js/crypto.js` | Tout le chiffrement. Le fichier le plus sensible : ne le modifie pas sans me demander. |
 | `js/store.js` | Enregistre sur le téléphone (IndexedDB). Ne voit que des données déjà chiffrées. |
