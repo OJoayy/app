@@ -103,11 +103,16 @@ export function computeBalances(data, skipTxId = null) {
       const s = splitIncome(tx.amount);
       for (const id of POOL_IDS) pools[id] += s[id];
     } else if (tx.type === 'expense') {
-      accounts.set(tx.from, accounts.get(tx.from) - tx.amount);
-      pools[tx.pool] -= tx.amount;
+      // Les frais sortent du même compte et du même pool que la dépense.
+      const fee = tx.fee || 0;
+      accounts.set(tx.from, accounts.get(tx.from) - tx.amount - fee);
+      pools[tx.pool] -= tx.amount + fee;
     } else if (tx.type === 'transfer') {
-      accounts.set(tx.from, accounts.get(tx.from) - tx.amount);
+      // Un transfert ne change pas les pools ; ses frais, si, : ils sortent de Nécessité.
+      const fee = tx.fee || 0;
+      accounts.set(tx.from, accounts.get(tx.from) - tx.amount - fee);
       accounts.set(tx.to, accounts.get(tx.to) + tx.amount);
+      pools.NEC -= fee;
     } else if (tx.type === 'loan') {
       // Un prêt n'est PAS un revenu : l'argent entre, les pools ne bougent pas.
       accounts.set(tx.to, accounts.get(tx.to) + tx.amount);
@@ -128,6 +133,13 @@ export function computeBalances(data, skipTxId = null) {
   let poolTotal = 0;
   for (const id of POOL_IDS) poolTotal += pools[id];
   return { accounts, pools, liquid, poolTotal };
+}
+
+// Frais d'une dépense ou d'un transfert : un pourcentage du montant, arrondi au FCFA.
+// feeBp = centièmes de % (150 = 1,5 %). Toujours payés par le compte qui paie ou envoie.
+export const MAX_FEE_BP = 10000; // 100 %
+export function feeOf(amount, feeBp) {
+  return feeBp ? Math.round((amount * feeBp) / 10000) : 0;
 }
 
 // Go / No-Go : combien il manque au pool (0 = ça passe).
@@ -227,6 +239,15 @@ export function cleanTx(t, refs) {
     out.from = acc(t.from);
     out.to = acc(t.to);
     if (out.from === out.to) fail('tx.sameAccount');
+  }
+  // Frais (dépense et transfert seulement) : le montant est toujours recalculé
+  // à partir du pourcentage, jamais repris tel quel d'un fichier.
+  if (t.feeBp !== undefined && t.feeBp !== null && t.feeBp !== 0) {
+    if (t.type !== 'expense' && t.type !== 'transfer') fail('tx.fee');
+    if (!Number.isInteger(t.feeBp) || t.feeBp < 1 || t.feeBp > MAX_FEE_BP) fail('tx.fee');
+    const fee = feeOf(out.amount, t.feeBp);
+    if (out.amount + fee > MAX_AMOUNT) fail('tx.fee'); // montant + frais : toujours sous le plafond
+    if (fee > 0) { out.feeBp = t.feeBp; out.fee = fee; }
   }
   return out;
 }

@@ -1,11 +1,13 @@
-# SIKA — v0.7
+# SIKA — v0.9
 
 - **Étape 1 :** le coffre-fort (chiffrement, phrase secrète, clé de secours, sauvegarde).
 - **Étape 2 :** comptes, pools, revenus, dépenses, transferts, Go/No-Go.
 - **v0.4 :** code PIN, images de compte, bouton retour d'Android, look plus compact.
 - **v0.5 (étape 3) :** solde en FCFA, £ et €, mode discret (œil), bouton + flottant, PIN à 7 chiffres en cases rondes, œil dans les champs secrets.
 - **Nouveau en v0.6 (étapes 4 et 5) :** gestionnaire de dettes et gestionnaire d'investissements. Mode discret en étoiles, seulement sur le solde principal.
-- **Nouveau en v0.7 :** bouton + réorganisé (Dépense et Revenu côte à côte en bas), mode discret aussi sur les dettes, flèche des dates alignée, « Solde des pools » sur la page Comptes.
+- **Nouveau en v0.9 :** frais en % sur les dépenses et les transferts, glissement animé entre les onglets, **tableau de bord pour ordinateur** (section 5 octies).
+- **v0.8 :** « Mes envies » (écran caché), espaces des milliers pendant la frappe, glisser pour changer d'onglet, envoi vers Google Drive corrigé, bouton + simplifié (Dépense rouge, Revenu vert, Transfert).
+- **v0.7 :** bouton + réorganisé (Dépense et Revenu côte à côte en bas), mode discret aussi sur les dettes, flèche des dates alignée, « Solde des pools » sur la page Comptes.
 - **Réglages (v0.6) :** ils ne sont plus dans la barre du bas. Touche l'icône en haut à gauche du Dashboard.
 
 **Règle : n'entre que des données fictives jusqu'à la fin de l'étape 7.**
@@ -122,7 +124,7 @@ Envoie-moi seulement ce qui ne se passe pas comme prévu.
 | --- | --- | --- |
 | 1 | Ouvre le Dashboard avec internet | Sous le solde : « … £ · … € » |
 | 2 | Touche l'œil de la carte du solde | Le solde devient « •••••• FCFA » ; le reste de l'app ne change pas |
-| 3 | Touche le bouton + rond (avec 2 comptes ou plus) | En bas : Dépense et Revenu côte à côte. Au-dessus de Revenu : Transfert, puis Remboursement et Investir. Le bouton retour ferme le menu |
+| 3 | Touche le bouton + rond (avec 2 comptes ou plus) | En bas : Dépense (rouge) et Revenu (vert), chacun une moitié de ligne. Au-dessus de Revenu : Transfert (blanc). Le bouton retour ferme le menu |
 | 4 | Réglages → Créer un code PIN → 7 chiffres → « Afficher les chiffres » | Les chiffres apparaissent dans les cases ; après Enregistrer, le formulaire se referme |
 | 5 | Verrouille, puis tape le PIN | 7 cases rondes ; l'app s'ouvre au 7e chiffre |
 
@@ -176,6 +178,74 @@ Envoie-moi seulement ce qui ne se passe pas comme prévu.
 | 5 | Ajoute un terrain « Je l'ai déjà » | Étiquette « estimation » |
 | 6 | Historique → filtre « Autres » | Prêt reçu, remboursement, achat, vente apparaissent |
 
+## 5 septies. Nouveautés v0.8
+
+**Mes envies (écran caché).** Une liste de ce que tu aimerais acheter ou faire. Chaque ligne : quoi, pourquoi, prix estimé (FCFA, € ou £, facultatif). Coche le rond quand c'est fait.
+
+- **Pour l'ouvrir :** appuie longtemps (1 seconde) sur le mot **SIKA** en haut du Dashboard, puis lève le doigt.
+- **Si tu oublies le geste :** un petit lien « Mes envies » est tout en bas des Réglages.
+- **Ce n'est pas un coffre dans le coffre :** l'écran est seulement hors de vue. Il est chiffré comme tout le reste.
+- **Aucun argent ne bouge** quand tu coches une envie. Pour l'achat réel, ajoute une dépense comme d'habitude.
+
+**Montants.** Les espaces des milliers apparaissent pendant la frappe (1 250 000). Si tu tapes un point ou une virgule dans un montant en FCFA, rien n'est effacé : l'app refuse le montant et te le dit.
+
+**Glisser.** Glisse le doigt de droite à gauche au milieu de l'écran pour passer à l'onglet suivant (Dashboard → Comptes → Dettes → Investir → Historique). De gauche à droite pour revenir. Les bords de l'écran restent pour le geste « retour » d'Android.
+
+**Google Drive.** Réglages → **Envoyer vers Google Drive**. Dans le menu Android, choisis **Drive** (ou « Enregistrer dans Drive »), puis **Enregistrer**. Le fichier s'appelle `sika-sauvegarde-AAAA-MM-JJ.txt` : c'est normal, Android refuse d'envoyer un fichier `.bak`. Il reste chiffré. Si l'app affiche « touche encore », touche une 2e fois. Si l'envoi échoue, l'app affiche le nom de l'erreur : note-le et envoie-le moi.
+
+| # | Test | Résultat attendu |
+| --- | --- | --- |
+| 1 | Appui long sur SIKA | « Mes envies » s'ouvre ; retour → Dashboard |
+| 2 | Ajoute « Moto », 850000 | Le champ affiche 850 000 pendant la frappe |
+| 3 | Ajoute une envie à 1 200 £ | La ligne montre « 1 200 £ » et « ≈ … FCFA » |
+| 4 | Coche « Moto » | Elle passe dans « Voir les envies réalisées », avec la date |
+| 5 | Glisse de droite à gauche au milieu du Dashboard | L'onglet Comptes s'ouvre |
+| 6 | Réglages → Envoyer vers Google Drive → Drive → Enregistrer | Le fichier `.txt` est dans Drive |
+| 7 | Réglages → Importer → choisis ce fichier `.txt` depuis Drive | La sauvegarde s'ouvre avec ta phrase secrète |
+
+## 5 octies. Nouveautés v0.9
+
+**Frais (%).** Dans une dépense ou un transfert, le champ **Frais (%)** est sur la même ligne que le montant. Tape par exemple `1,5`. Sous la ligne, l'app affiche les frais et le total débité.
+
+- Les frais sortent **toujours du compte qui paie ou qui envoie**.
+- **Dépense :** les frais sortent aussi du même pool que la dépense.
+- **Transfert :** un transfert ne change pas les pools, mais ses frais, si : ils sortent de **Nécessité**. L'app prévient si ce pool ne suffit pas.
+- **Historique :** chaque frais a sa propre ligne, dans « Autres » (et « Tout »). En haut : frais payés ce mois, sur 12 mois et au total.
+- Le montant des frais est toujours recalculé à partir du %, arrondi au FCFA.
+
+**Glisser.** L'écran suit le doigt, puis le suivant glisse en place. Si le geste est trop court, l'écran revient. Si ton téléphone a « animations réduites », le changement se fait sans mouvement.
+
+**Tableau de bord (ordinateur).** Une page pour voir toutes tes données en graphiques sur grand écran. Elle ouvre une **sauvegarde** : elle ne modifie rien, n'enregistre rien et n'envoie rien.
+
+Ce qu'elle montre : argent disponible (FCFA, £, €), valeur nette, résumé de la période (revenus, dépenses, reste, frais, remboursé, investi, dépassements), revenus et dépenses par mois, dépenses par humeur, argent disponible dans le temps, pools, dépenses par pool, comptes, frais par compte, dettes (avec la part déjà payée), investissements, plus grosses dépenses, mes envies. Chaque graphique a « Voir le tableau ». Période : 3, 6, 12 mois ou tout.
+
+**Installer sur l'ordinateur (une seule fois) :**
+
+1. Sur ton ordinateur, ouvre **Chrome** ou **Edge** à l'adresse : `https://ojoayy.github.io/app/dashboard.html`
+2. Installe-le comme une app :
+   - **Chrome :** icône « Installer » à droite de la barre d'adresse, ou menu ⋮ → « Caster, enregistrer et partager » → « Installer la page en tant qu'application ». Le nom exact du menu change selon la version de Chrome.
+   - **Edge :** menu ⋯ → Applications → « Installer ce site en tant qu'application ».
+   - **Mac avec Safari :** Fichier → « Ajouter au Dock ».
+3. Une icône **SIKA · Tableau de bord** apparaît. Après la première ouverture, elle marche aussi sans internet.
+
+**L'utiliser :**
+
+1. Sur le téléphone : Réglages → Télécharger la sauvegarde ou Envoyer vers Google Drive.
+2. Sur l'ordinateur : récupère le fichier (téléchargé depuis Drive, ou par câble).
+3. Ouvre le tableau de bord → choisis le fichier → tape ta phrase secrète (ou ta clé de secours) → **Ouvrir**.
+4. Quand tu as fini : **Fermer**. Il se ferme aussi tout seul après 15 min sans rien toucher, ou si l'onglet reste caché plus de 5 min.
+
+**Sécurité :** uniquement sur **ton** ordinateur, jamais sur un ordinateur public. Sur un ordinateur partagé, supprime le fichier de sauvegarde des Téléchargements après usage. Les chiffres montrent l'état **au moment de la sauvegarde** : pour des chiffres à jour, refais une sauvegarde.
+
+| # | Test | Résultat attendu |
+| --- | --- | --- |
+| 1 | Dépense 20 000, frais 1,5 | Sous la ligne : « Frais : 300 FCFA · total débité : 20 300 FCFA » ; le compte baisse de 20 300 |
+| 2 | Transfert 100 000, frais 1 | Le compte qui envoie baisse de 101 000 ; l'autre monte de 100 000 |
+| 3 | Historique → Autres | Deux lignes « Frais … » et le résumé des frais en haut |
+| 4 | Glisse lentement au milieu de l'écran, puis lâche à mi-chemin | L'écran suit le doigt, puis passe à l'onglet suivant |
+| 5 | Ordinateur : ouvre le tableau de bord avec une sauvegarde récente | Le grand chiffre est le même que le solde du téléphone |
+| 6 | Tableau de bord → Fermer | Retour à l'écran d'ouverture ; plus aucun chiffre |
+
 ## 6. Ce qu'il faut savoir sur les sauvegardes
 
 - Une sauvegarde s'ouvre avec la phrase **valable au moment où elle a été faite**, ou avec la clé de secours de ce moment-là.
@@ -214,7 +284,11 @@ Envoie-moi seulement ce qui ne se passe pas comme prévu.
 | `js/debts.js` | Les calculs des dettes : mensualité, échéancier, retards, avalanche et boule de neige. |
 | `js/assets.js` | Les calculs des investissements : coût, valeur, plus-value, gain réalisé. |
 | `js/finance.js` | Les écrans Dettes et Investir. |
-| `js/ui.js` | Petits outils d'affichage partagés (montants, dates, petit graphique). |
+| `js/ui.js` | Petits outils d'affichage partagés (montants, dates, petit graphique, espaces des milliers). |
+| `js/wishes.js` | L'écran « Mes envies ». |
+| `dashboard.html` + `js/dashboard.js` | Le tableau de bord pour ordinateur. |
+| `js/insights.js` | Les calculs du tableau de bord (totaux, mois, évolution). |
+| `js/charts.js` | Les graphiques, dessinés à la main (sans bibliothèque extérieure). |
 | `fonts/` | La police Figtree et sa licence (OFL). |
 | `js/crypto.js` | Tout le chiffrement. Le fichier le plus sensible : ne le modifie pas sans me demander. |
 | `js/store.js` | Enregistre sur le téléphone (IndexedDB). Ne voit que des données déjà chiffrées. |

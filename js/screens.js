@@ -76,10 +76,26 @@ function txRow(data, tx) {
   left.setAttribute('aria-hidden', 'true');
   const mid = el('span', 'tx-mid');
   mid.append(el('span', 'tx-title', title), el('span', 'tx-meta', meta));
+  if (tx.fee) mid.append(el('span', 'tx-meta', t('feeMeta', { fee: money(tx.fee) })));
   if (tx.reason) mid.append(el('span', 'tx-meta nogo-note', '⚠ ' + tx.reason));
   row.append(left, mid, el('span', amountCls, amount));
   // Un prêt reçu se modifie depuis sa dette.
   row.onclick = () => (tx.type === 'loan' ? F.openDebt(tx.debt) : openTxForm(tx.type, tx));
+  return row;
+}
+
+// Ligne de frais (historique) : ouvre l'opération qui les a payés.
+function feeRow(data, tx) {
+  const row = el('button', 'tx-row fee-row');
+  row.type = 'button';
+  const icon = el('span', 'tx-icon', '%');
+  icon.setAttribute('aria-hidden', 'true');
+  const mid = el('span', 'tx-mid');
+  const pct = (tx.feeBp / 100).toLocaleString(getLang() === 'en' ? 'en-GB' : 'fr-FR');
+  mid.append(el('span', 'tx-title', t('feeTitle', { pct, what: tx.desc || t(tx.type === 'transfer' ? 'transferLabel' : 'newExpense') })),
+    el('span', 'tx-meta', `${accountName(data, tx.from)} · ${fmtDay(tx.date)}`));
+  row.append(icon, mid, el('span', 'amt', '−' + money(tx.fee)));
+  row.onclick = () => openTxForm(tx.type, tx);
   return row;
 }
 
@@ -173,10 +189,34 @@ export function renderHistory() {
     c.classList.toggle('active', c.dataset.filter === histFilter);
     c.setAttribute('aria-pressed', String(c.dataset.filter === histFilter));
   }
-  const list = L.sortedTx(data, (x) => histFilter === 'all' || x.type === histFilter
-    || (histFilter === 'other' && x.type !== 'income' && x.type !== 'expense'));
-  fillList($('hist-list'), data, list.slice(0, histLimit), 'emptyHistory');
-  $('btn-hist-more').hidden = list.length <= histLimit;
+  // Les frais sont des lignes à part, rangées dans « Autres » (et dans « Tout »),
+  // juste sous l'opération qui les a payés.
+  const items = [];
+  for (const x of L.sortedTx(data)) {
+    const main = histFilter === 'all' || x.type === histFilter
+      || (histFilter === 'other' && x.type !== 'income' && x.type !== 'expense');
+    if (main) items.push(x);
+    if (x.fee && (histFilter === 'all' || histFilter === 'other')) items.push({ feeOf: x });
+  }
+  const box = $('hist-list');
+  box.replaceChildren();
+  if (!items.length) box.append(el('p', 'muted', t('emptyHistory')));
+  for (const it of items.slice(0, histLimit)) box.append(it.feeOf ? feeRow(data, it.feeOf) : txRow(data, it));
+  $('btn-hist-more').hidden = items.length <= histLimit;
+  // Combien de frais j'ai payé : ce mois-ci, sur 12 mois, et au total.
+  const now = new Date();
+  const month = `${now.getFullYear()}-${now.getMonth()}`;
+  const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString();
+  let fm = 0; let fy = 0; let fa = 0;
+  for (const x of data.tx) {
+    if (!x.fee) continue;
+    const d = new Date(x.date);
+    fa += x.fee;
+    if (x.date >= yearAgo) fy += x.fee;
+    if (`${d.getFullYear()}-${d.getMonth()}` === month) fm += x.fee;
+  }
+  $('hist-fees').hidden = fa === 0;
+  $('hist-fees').textContent = fa ? t('feesSummary', { m: money(fm), y: money(fy), a: money(fa) }) : '';
 }
 
 // ---------- Formulaire d'opération ----------
@@ -218,6 +258,7 @@ function syncTxFields() {
   $('tx-debt-wrap').hidden = type !== 'repay';
   $('tx-asset-wrap').hidden = !(type === 'buy' || type === 'sell' || (type === 'income' && txSource === 'asset'));
   $('tx-share-wrap').hidden = type !== 'sell';
+  $('tx-fee-wrap').hidden = !hasFee();
   $('tx-from-label').textContent = t(type === 'transfer' ? 'fromAccount' : 'account');
   $('tx-to-label').textContent = t(type === 'transfer' ? 'toAccount' : 'account');
   $('tx-amount-label').textContent = t(type === 'sell' ? 'amountReceived' : 'amountLabel');
@@ -259,6 +300,7 @@ export function openTxForm(type, tx = null, preset = {}) {
   F.debtOptions($('tx-debt'), data, tx ? tx.debt : preset.debt);
   F.assetOptions($('tx-asset'), data, tx ? tx.asset : preset.asset);
   $('tx-share').value = tx && tx.shareBp ? String(tx.shareBp / 100).replace('.', ',') : '100';
+  $('tx-fee').value = tx && tx.feeBp ? String(tx.feeBp / 100).replace('.', ',') : '';
 
   $('btn-tx-delete').hidden = !tx;
   syncTxFields();
@@ -267,11 +309,28 @@ export function openTxForm(type, tx = null, preset = {}) {
   if (!tx) $('tx-amount').focus();
 }
 
+// Frais en % : "1,5" -> 150 (centièmes de %). Vide = 0. null = invalide.
+const hasFee = () => txType === 'expense' || txType === 'transfer';
+function parseFeeBp(raw) {
+  const s = String(raw).trim().replace('%', '').replace(/\s/g, '').replace(',', '.');
+  if (s === '') return 0;
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(s)) return null;
+  const bp = Math.round(Number(s) * 100);
+  return bp <= L.MAX_FEE_BP ? bp : null;
+}
+
 // Recalcule le Go/No-Go, l'aperçu de répartition et l'alerte compte.
 function updateTxChecks() {
   const data = ctx.data();
-  const amount = L.parseAmount($('tx-amount').value);
+  const base = L.parseAmount($('tx-amount').value);
   const b = L.computeBalances(data, editing && editing.id);
+  // Frais : affichés sous la ligne, et comptés dans le Go/No-Go et l'alerte compte.
+  const feeBp = hasFee() ? parseFeeBp($('tx-fee').value) : 0;
+  const fee = base && feeBp ? L.feeOf(base, feeBp) : 0;
+  const note = $('tx-fee-note');
+  note.hidden = !(hasFee() && (fee > 0 || feeBp === null));
+  note.textContent = feeBp === null ? t('errFee') : fee ? t('feeNote', { fee: money(fee), total: money(base + fee) }) : '';
+  const amount = base ? base + fee : base;
 
   const split = $('tx-split');
   split.hidden = !(txType === 'income' && amount);
@@ -287,12 +346,16 @@ function updateTxChecks() {
   const nogo = $('tx-nogo');
   const poolId = txType === 'expense' ? $('tx-pool').value : txType === 'repay' ? 'DET' : txType === 'buy' ? 'INV' : null;
   const short = poolId && amount ? L.poolShortfall(b, poolId, amount) : 0;
-  nogo.hidden = short === 0;
+  // Transfert : ses frais sortent de Nécessité -> simple alerte si ce pool ne suffit pas.
+  const feeShort = txType === 'transfer' && fee ? L.poolShortfall(b, 'NEC', fee) : 0;
+  nogo.hidden = short === 0 && feeShort === 0;
   $('tx-reason-wrap').hidden = !(short && txType === 'expense');
   if (short) {
     const poolBal = b.pools[poolId];
     nogo.textContent = poolBal > 0 ? t('nogo', { pool: poolName(poolId), x: money(short) })
       : t('nogoEmpty', { pool: poolName(poolId), bal: money(poolBal) });
+  } else if (feeShort) {
+    nogo.textContent = t('feeNogo', { pool: poolName('NEC'), bal: money(b.pools.NEC) });
   }
 
   const warn = $('tx-acc-warn');
@@ -321,12 +384,15 @@ async function onTxSave() {
   const date = dateFromInput($('tx-date').value);
   if (!date) return err('errDate');
   const tx = { id: editing ? editing.id : L.newId(), type: txType, amount, date, desc: $('tx-desc').value };
+  const feeBp = hasFee() ? parseFeeBp($('tx-fee').value) : 0;
+  if (feeBp === null) return err('errFee');
+  if (feeBp) tx.feeBp = feeBp;
   if (txType === 'expense') {
     if (!txMood) return err('errMood');
     tx.from = $('tx-from').value;
     tx.pool = $('tx-pool').value;
     tx.mood = txMood;
-    const short = L.poolShortfall(L.computeBalances(data, editing && editing.id), tx.pool, amount);
+    const short = L.poolShortfall(L.computeBalances(data, editing && editing.id), tx.pool, amount + L.feeOf(amount, feeBp));
     if (short) {
       const reason = $('tx-reason').value.trim();
       if (!reason) return err('errReason');
@@ -539,7 +605,7 @@ export function refreshDiscreet() {
 function snapshot() {
   const ids = $('s-tx').hidden
     ? ['acc-name', 'acc-start', 'acc-split', 'acc-archived']
-    : ['tx-amount', 'tx-desc', 'tx-from', 'tx-to', 'tx-pool', 'tx-date', 'tx-reason', 'tx-debt', 'tx-asset', 'tx-share'];
+    : ['tx-amount', 'tx-fee', 'tx-desc', 'tx-from', 'tx-to', 'tx-pool', 'tx-date', 'tx-reason', 'tx-debt', 'tx-asset', 'tx-share'];
   const vals = ids.map((id) => ($(id).type === 'checkbox' ? $(id).checked : $(id).value));
   return JSON.stringify([vals, txMood, txSource, accCategory, accIcon]);
 }
@@ -561,13 +627,13 @@ export async function back() {
 
 // Au verrouillage : effacer tout ce qui montre de l'argent.
 export function clearAll() {
-  for (const id of ['home-total', 'home-fx', 'acc-pools-note', 'acc-total', 'acc-current']) $(id).textContent = '';
+  for (const id of ['home-total', 'home-fx', 'acc-pools-note', 'acc-total', 'acc-current', 'hist-fees', 'tx-fee-note']) $(id).textContent = '';
   F.clearFinance();
   toggleFab(false);
   for (const id of ['home-expenses', 'home-incomes', 'pool-grid', 'acc-groups', 'hist-list', 'tx-split', 'tx-from', 'tx-to']) {
     $(id).replaceChildren();
   }
-  for (const id of ['tx-amount', 'tx-desc', 'tx-reason', 'acc-name', 'acc-start']) $(id).value = '';
+  for (const id of ['tx-amount', 'tx-fee', 'tx-desc', 'tx-reason', 'acc-name', 'acc-start']) $(id).value = '';
   for (const id of ['tx-nogo', 'tx-acc-warn']) $(id).textContent = '';
   editing = null;
   accEditing = null;
@@ -610,7 +676,7 @@ export function initScreens(context) {
   $('btn-add-account').onclick = () => openAccountForm();
 
   liveAmount($('tx-amount')); // d'abord les espaces, puis les vérifications
-  for (const id of ['tx-amount', 'tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('input', updateTxChecks);
+  for (const id of ['tx-amount', 'tx-fee', 'tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('input', updateTxChecks);
   for (const id of ['tx-pool', 'tx-from', 'tx-to']) $(id).addEventListener('change', updateTxChecks);
   F.initFinance(ctx, { openTxForm, openTab, currentTab: () => currentTab(), setReturn: (id) => { returnTo = id; } });
   liveAmount($('acc-start'));

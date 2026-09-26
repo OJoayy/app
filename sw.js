@@ -1,7 +1,7 @@
 // sw.js — garde l'app en mémoire pour qu'elle s'ouvre sans internet.
 // À chaque nouvelle version : changer VERSION, sinon le téléphone garde l'ancienne.
 
-const VERSION = 'fp-v0.8';
+const VERSION = 'fp-v0.9';
 const FILES = [
   './',
   './index.html',
@@ -19,6 +19,12 @@ const FILES = [
   './js/debts.js',
   './js/assets.js',
   './js/wishes.js',
+  './js/insights.js',
+  './js/charts.js',
+  './js/dashboard.js',
+  './dashboard.html',
+  './css/dashboard.css',
+  './manifest-dashboard.webmanifest',
   './fonts/figtree.woff2',
   './manifest.webmanifest',
   './icons/icon-192.png',
@@ -44,7 +50,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   if (req.mode === 'navigate') {
-    event.respondWith(caches.open(VERSION).then((c) => c.match('./index.html')).then((r) => r || fetch(req)));
+    // Le tableau de bord (ordinateur) a sa propre page ; tout le reste ouvre l'app.
+    const path = new URL(req.url).pathname;
+    const board = new URL('./dashboard', self.registration.scope).pathname; // /app/dashboard
+    const page = path === board || path === board + '.html' ? './dashboard.html' : './index.html';
+    event.respondWith(caches.open(VERSION).then((c) => c.match(page)).then((r) => r || fetch(req)));
     return;
   }
   // On ne lit que NOTRE cache (pas ceux d'autres sites de la même adresse).

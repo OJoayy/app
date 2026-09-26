@@ -276,7 +276,7 @@ function onDebtIcs() {
   if (!d) return;
   const st = D.debtStatus(d, data);
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.8//FR', 'CALSCALE:GREGORIAN'];
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.9//FR', 'CALSCALE:GREGORIAN'];
   for (const r of st.schedule) {
     if (r.paid || r.date < D.todayYmd()) continue;
     const day = r.date.replace(/-/g, '');

@@ -12,7 +12,7 @@ import * as FX from './fx.js';
 import * as F from './finance.js';
 import * as Wi from './wishes.js';
 
-const APP_VERSION = '0.8';
+const APP_VERSION = '0.9';
 const PASS_EVERY_MS = 7 * 86400000; // la phrase est redemandée tous les 7 jours
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 const MAX_DELAY_S = 300; // attente maximale après des erreurs : 5 min
@@ -240,6 +240,8 @@ function openSession(key, meta, data, startEpoch) {
 function lock() {
   epoch += 1;
   session = null;
+  // Un glissement interrompu ne doit pas laisser un écran décalé ou pâle.
+  for (const sc of document.querySelectorAll('.screen')) { sc.style.transition = ''; sc.style.transform = ''; sc.style.opacity = ''; }
   pending = null;
   pendingImport = null;
   // Effacer ce qui est affiché. (JavaScript ne permet pas d'effacer la
@@ -1015,7 +1017,7 @@ function onIcs() {
   const end = new Date(start.getTime() + 15 * 60000);
   const uid = C.toB64(C.randomBytes(9)).replace(/[+/=]/g, 'x');
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.8//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//sika//v0.9//FR', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `UID:${uid}@sika`,
     `DTSTAMP:${icsStamp(new Date(), true)}`,
@@ -1209,9 +1211,32 @@ function setupWishesGesture() {
 const SWIPE_ORDER = ['s-home', 's-accounts', 's-debts', 's-assets', 's-history'];
 
 function setupSwipe() {
-  let s0 = null;
+  // L'écran suit le doigt ; au lâcher, il part d'un côté et le suivant arrive de
+  // l'autre. Si le geste est trop court, l'écran revient à sa place.
+  // Réglage « animations réduites » du téléphone : changement direct, sans mouvement.
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const neighbour = (id, dir) => {
+    const i = SWIPE_ORDER.indexOf(id) + dir;
+    return i >= 0 && i < SWIPE_ORDER.length ? SWIPE_ORDER[i] : null;
+  };
+  const clear = (node) => { node.style.transition = ''; node.style.transform = ''; node.style.opacity = ''; };
+  const slideIn = (id, dir) => {
+    const node = $(id);
+    node.style.transition = 'none';
+    node.style.transform = `translateX(${dir * 35}%)`;
+    node.style.opacity = '0';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      node.style.transition = 'transform 220ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease-out';
+      node.style.transform = '';
+      node.style.opacity = '';
+      setTimeout(() => clear(node), 260);
+    }));
+  };
+  let g = null;
+  const cancel = () => { if (g && g.node) clear(g.node); g = null; };
+
   document.addEventListener('touchstart', (e) => {
-    s0 = null;
+    cancel();
     if (!session || e.touches.length !== 1) return;
     const cur = currentScreen();
     if (!SWIPE_ORDER.includes(cur) || !$('fab-menu').hidden || !$('modal').hidden || isBusy()) return;
@@ -1219,22 +1244,61 @@ function setupSwipe() {
     const w = window.innerWidth;
     if (tch.clientX < w * 0.15 || tch.clientX > w * 0.85) return;
     if (e.target.closest('input, select, textarea, .chips, .pin-slots, .spark')) return;
-    s0 = { x: tch.clientX, y: tch.clientY, t: Date.now(), screen: cur };
+    g = { x: tch.clientX, y: tch.clientY, t: Date.now(), screen: cur, node: $(cur), lock: null, dx: 0 };
   }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!g) return;
+    const tch = e.touches[0];
+    const dx = tch.clientX - g.x;
+    const dy = tch.clientY - g.y;
+    if (!g.lock) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      g.lock = Math.abs(dx) > 1.5 * Math.abs(dy) ? 'x' : 'y';
+      if (g.lock === 'y') { g = null; return; } // défilement vertical normal
+    }
+    if (!session || currentScreen() !== g.screen) { cancel(); return; }
+    // Pas d'onglet de ce côté : l'écran résiste (il bouge 4 fois moins).
+    const eff = neighbour(g.screen, dx < 0 ? 1 : -1) ? dx : dx / 4;
+    g.dx = dx;
+    if (reduce.matches) return;
+    g.node.style.transition = 'none';
+    g.node.style.transform = `translateX(${eff}px)`;
+    g.node.style.opacity = String(1 - Math.min(Math.abs(eff) / window.innerWidth, 1) * 0.35);
+  }, { passive: true });
+
   document.addEventListener('touchend', (e) => {
-    if (!s0) return;
-    const tch = e.changedTouches[0];
-    const dx = tch.clientX - s0.x;
-    const dy = tch.clientY - s0.y;
-    const from = s0;
-    s0 = null;
-    if (Date.now() - from.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
-    if (!session || currentScreen() !== from.screen) return;
-    const i = SWIPE_ORDER.indexOf(from.screen) + (dx < 0 ? 1 : -1);
-    if (i < 0 || i >= SWIPE_ORDER.length) return;
-    screens.openTab(SWIPE_ORDER[i]);
+    if (!g) return;
+    const from = g;
+    g = null;
+    if (from.lock !== 'x') { clear(from.node); return; }
+    const dx = e.changedTouches[0].clientX - from.x;
+    const w = window.innerWidth;
+    const target = neighbour(from.screen, dx < 0 ? 1 : -1);
+    const fast = Math.abs(dx) > 50 && Date.now() - from.t < 300;
+    const go = target && session && currentScreen() === from.screen && (Math.abs(dx) > w * 0.25 || fast);
+    if (!go) {
+      if (reduce.matches) { clear(from.node); return; }
+      from.node.style.transition = 'transform 200ms ease-out, opacity 200ms ease-out';
+      from.node.style.transform = '';
+      from.node.style.opacity = '';
+      setTimeout(() => clear(from.node), 220);
+      return;
+    }
+    const dir = dx < 0 ? 1 : -1;
+    if (reduce.matches) { clear(from.node); screens.openTab(target); return; }
+    from.node.style.transition = 'transform 150ms ease-in, opacity 150ms ease-in';
+    from.node.style.transform = `translateX(${-dir * w}px)`;
+    from.node.style.opacity = '0';
+    setTimeout(() => {
+      clear(from.node);
+      if (!session || currentScreen() !== from.screen) return; // verrouillé entre-temps
+      screens.openTab(target);
+      slideIn(target, dir);
+    }, 150);
   }, { passive: true });
-  document.addEventListener('touchcancel', () => { s0 = null; }, { passive: true });
+
+  document.addEventListener('touchcancel', cancel, { passive: true });
 }
 
 init();

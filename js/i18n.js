@@ -4,6 +4,27 @@
 const T = {
   fr: {
     appName: 'SIKA',
+    // --- v0.9 : tableau de bord (ordinateur) ---
+    language: 'Langue', dbTitle: 'Tableau de bord', dbTagline: 'Tableau de bord. Ouvre une sauvegarde pour tout voir en graphiques.',
+    dbFile: 'Fichier de sauvegarde (.bak ou .txt)', dbOpen: 'Ouvrir', dbOpening: 'Ouverture…', dbClose: 'Fermer',
+    dbPrivacy: 'Rien n’est enregistré sur cet ordinateur ni envoyé sur internet. « Fermer », 15 min sans bouger ou fermer l’onglet effacent tout.',
+    dbFooter: 'Lecture seule. Pour modifier, utilise l’app sur ton téléphone, puis fais une nouvelle sauvegarde.',
+    dbBackupOf: 'Sauvegarde du {date}', dbPeriod: 'Période', dbMonths: '{n} mois', dbAll: 'Tout',
+    dbLastMonths: '{n} derniers mois', dbAllTime: 'Depuis le début', dbPeriodTitle: 'Résumé · {p}',
+    dbIncome: 'Revenus', dbExpense: 'Dépenses', dbExpenseCount: '{n} dépense(s)', dbLeft: 'Reste', dbRate: '{p} des revenus',
+    dbFees: 'Frais', dbRepaid: 'Remboursé (dettes)', dbInvested: 'Investi', dbOverBudget: 'Dépassements', dbOverBudgetSub: 'dépenses au-delà du pool',
+    dbDebtLeft: 'Dettes restantes', dbMonthlyTitle: 'Revenus et dépenses par mois', dbMonthlySub: 'Dépenses frais compris',
+    dbMonth: 'Mois', dbMoodTitle: 'Dépenses par humeur', dbMood: 'Humeur', dbCount: 'Nombre', dbTotal: 'Total',
+    dbTimelineTitle: 'Argent disponible dans le temps', dbPool: 'Pool', dbShare: 'Part', dbBalance: 'Solde',
+    dbPoolSpendTitle: 'Dépenses par pool', dbFeesIncluded: 'frais compris', dbAccount: 'Compte', dbType: 'Type',
+    dbAccountsSub: 'Total : {x}', dbAccountsTitle: 'Comptes', dbFeesTitle: 'Frais payés par compte', dbNoFees: 'Aucun frais sur la période.',
+    dbDebtsSub: 'Capital restant : {x}', dbNext: 'Prochaine échéance', dbPaid: 'Déjà payé', dbAssetsSub: 'Valeur totale : {x}',
+    dbValue: 'Valeur', dbGain: 'Plus-value', dbTopTitle: 'Plus grosses dépenses', dbWhat: 'Quoi', dbAmount: 'Montant',
+    dbWishesSub: '{n} à faire · coût estimé {x} · {d} réalisée(s)', dbPrice: 'Prix', dbShowTable: 'Voir le tableau',
+    // --- v0.9 : frais ---
+    feeLabel: 'Frais (%)', errFee: 'Frais invalides : un pourcentage entre 0 et 100 (ex. 1,5).',
+    feeNote: 'Frais : {fee} · total débité : {total}', feeMeta: '+ frais : {fee}',
+    feeTitle: 'Frais {pct} % · {what}', feeNogo: '⚠️ Les frais d’un transfert sortent de {pool}, qui n’a que {bal}.', feesSummary: 'Frais payés — ce mois : {m} · 12 mois : {y} · au total : {a}',
     // --- v0.8 : envies, partage Drive ---
     wishesTitle: 'Mes envies', wishesTotalTitle: 'Coût estimé de ce qui reste', addWish: 'Ajouter une envie', editWish: 'Modifier l’envie',
     wishNameLabel: 'Quoi ?', wishNoteLabel: 'Pourquoi ? (une phrase)', wishAmountLabel: 'Prix estimé (facultatif)', currencyLabel: 'Devise',
@@ -248,6 +269,27 @@ const T = {
 
   en: {
     appName: 'SIKA',
+    // --- v0.9: dashboard (computer) ---
+    language: 'Language', dbTitle: 'Dashboard', dbTagline: 'Dashboard. Open a backup to see everything in charts.',
+    dbFile: 'Backup file (.bak or .txt)', dbOpen: 'Open', dbOpening: 'Opening…', dbClose: 'Close',
+    dbPrivacy: 'Nothing is saved on this computer or sent online. “Close”, 15 min without activity or closing the tab erase everything.',
+    dbFooter: 'Read-only. To change something, use the app on your phone, then make a new backup.',
+    dbBackupOf: 'Backup of {date}', dbPeriod: 'Period', dbMonths: '{n} months', dbAll: 'All',
+    dbLastMonths: 'Last {n} months', dbAllTime: 'Since the start', dbPeriodTitle: 'Summary · {p}',
+    dbIncome: 'Income', dbExpense: 'Expenses', dbExpenseCount: '{n} expense(s)', dbLeft: 'Left over', dbRate: '{p} of income',
+    dbFees: 'Fees', dbRepaid: 'Repaid (debts)', dbInvested: 'Invested', dbOverBudget: 'Over budget', dbOverBudgetSub: 'expenses beyond the pool',
+    dbDebtLeft: 'Debts left', dbMonthlyTitle: 'Income and expenses per month', dbMonthlySub: 'Expenses include fees',
+    dbMonth: 'Month', dbMoodTitle: 'Expenses by mood', dbMood: 'Mood', dbCount: 'Count', dbTotal: 'Total',
+    dbTimelineTitle: 'Available money over time', dbPool: 'Pool', dbShare: 'Share', dbBalance: 'Balance',
+    dbPoolSpendTitle: 'Expenses by pool', dbFeesIncluded: 'fees included', dbAccount: 'Account', dbType: 'Type',
+    dbAccountsSub: 'Total: {x}', dbAccountsTitle: 'Accounts', dbFeesTitle: 'Fees paid by account', dbNoFees: 'No fees in this period.',
+    dbDebtsSub: 'Principal left: {x}', dbNext: 'Next payment', dbPaid: 'Paid so far', dbAssetsSub: 'Total value: {x}',
+    dbValue: 'Value', dbGain: 'Gain', dbTopTitle: 'Biggest expenses', dbWhat: 'What', dbAmount: 'Amount',
+    dbWishesSub: '{n} to do · estimated cost {x} · {d} done', dbPrice: 'Price', dbShowTable: 'Show the table',
+    // --- v0.9: fees ---
+    feeLabel: 'Fee (%)', errFee: 'Invalid fee: a percentage between 0 and 100 (e.g. 1.5).',
+    feeNote: 'Fee: {fee} · total taken: {total}', feeMeta: 'plus fee: {fee}',
+    feeTitle: 'Fee {pct}% · {what}', feeNogo: '⚠️ Transfer fees come out of {pool}, which only has {bal}.', feesSummary: 'Fees paid — this month: {m} · 12 months: {y} · total: {a}',
     // --- v0.8: wishes, Drive sharing ---
     wishesTitle: 'My wishes', wishesTotalTitle: 'Estimated cost of what is left', addWish: 'Add a wish', editWish: 'Edit wish',
     wishNameLabel: 'What?', wishNoteLabel: 'Why? (one sentence)', wishAmountLabel: 'Estimated price (optional)', currencyLabel: 'Currency',

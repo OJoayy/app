@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Tableau de bord (ordinateur) : il lit une sauvegarde, ne garde rien, ne se connecte à rien. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#800020">
+  <title>SIKA · Tableau de bord</title>
+  <link rel="manifest" href="manifest-dashboard.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/dashboard.css">
+  <script type="module" src="js/dashboard.js"></script>
+</head>
+<body>
+  <!-- Ouvrir une sauvegarde -->
+  <section id="d-open" class="open-screen">
+    <div class="open-card">
+      <img class="brand-icon" src="icons/icon-192.png" alt="">
+      <h1 class="brand">SIKA</h1>
+      <p class="muted" data-i18n="dbTagline"></p>
+      <div class="lang" role="group" data-i18n-aria="language">
+        <button type="button" class="chip" data-lang="fr">Français</button>
+        <button type="button" class="chip" data-lang="en">English</button>
+      </div>
+      <label class="field"><span data-i18n="dbFile"></span>
+        <input id="d-file" type="file">
+      </label>
+      <div class="modes" role="radiogroup">
+        <label class="check"><input type="radio" name="d-mode" value="pass" checked> <span data-i18n="importModePass"></span></label>
+        <label class="check"><input type="radio" name="d-mode" value="rec"> <span data-i18n="importModeRec"></span></label>
+      </div>
+      <label class="field"><span id="d-secret-label" data-i18n="passLabel"></span>
+        <input id="d-secret" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </label>
+      <button type="button" id="d-open-btn" class="primary" data-i18n="dbOpen"></button>
+      <p id="d-err" class="error" role="alert"></p>
+      <p class="muted small" data-i18n="dbPrivacy"></p>
+    </div>
+  </section>
+
+  <!-- Tableau de bord -->
+  <section id="d-main" hidden>
+    <header class="topbar">
+      <div class="title">
+        <span class="brand small">SIKA</span>
+        <span class="muted" id="d-when"></span>
+      </div>
+      <div class="actions">
+        <div class="lang" role="group" data-i18n-aria="language">
+          <button type="button" class="chip" data-lang="fr">FR</button>
+          <button type="button" class="chip" data-lang="en">EN</button>
+        </div>
+        <button type="button" id="d-close" class="secondary" data-i18n="dbClose"></button>
+      </div>
+    </header>
+    <div class="filters" role="group" data-i18n-aria="dbPeriod">
+      <span class="muted" data-i18n="dbPeriod"></span>
+      <div id="d-periods" class="chips"></div>
+    </div>
+    <div id="d-late" class="banner danger" role="status" hidden></div>
+    <div id="d-grid" class="grid"></div>
+    <p class="muted small center" data-i18n="dbFooter"></p>
+  </section>
+</body>
+</html>

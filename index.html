@@ -185,6 +185,7 @@
       <button type="button" class="chip" data-filter="income" data-i18n="filterIncome"></button>
       <button type="button" class="chip" data-filter="other" data-i18n="filterOther"></button>
     </div>
+    <p id="hist-fees" class="banner info" hidden></p>
     <div id="hist-list" class="list card"></div>
     <button type="button" id="btn-hist-more" class="secondary" data-i18n="showMore" hidden></button>
   </section>
@@ -192,9 +193,16 @@
   <!-- Nouvelle opération / modifier -->
   <section id="s-tx" class="screen" hidden>
     <h1 id="tx-title"></h1>
-    <label><span id="tx-amount-label" data-i18n="amountLabel"></span>
-      <input id="tx-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
-    </label>
+    <!-- Montant et frais (%) sur la même ligne. -->
+    <div class="amount-row">
+      <label><span id="tx-amount-label" data-i18n="amountLabel"></span>
+        <input id="tx-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+      </label>
+      <label id="tx-fee-wrap" hidden><span data-i18n="feeLabel"></span>
+        <input id="tx-fee" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+      </label>
+    </div>
+    <p id="tx-fee-note" class="muted small-note" hidden></p>
     <label id="tx-debt-wrap" hidden><span data-i18n="debtLabel"></span>
       <select id="tx-debt"></select>
     </label>
